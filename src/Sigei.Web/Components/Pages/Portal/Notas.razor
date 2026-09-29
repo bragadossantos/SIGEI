@@ -1,0 +1,153 @@
+@page "/portal/notas"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = Politicas.ConsultarNotas)]
+@inherits PaginaEscola
+@using Microsoft.EntityFrameworkCore
+@using Sigei.Domain
+@using Sigei.Web.Data
+@inject ApplicationDbContext Db
+
+<PageTitle>Notas</PageTitle>
+
+<h1 class="h3 mb-3">Notas</h1>
+
+@if (escola is null || matriculas.Count == 0)
+{
+    <div class="alert alert-info">Não encontrámos nenhuma matrícula associada à sua conta. Contacte a secretaria da escola.</div>
+    return;
+}
+
+@if (matriculas.Count > 1)
+{
+    <div class="mb-3" style="max-width: 24rem">
+        <label class="form-label small mb-0" for="mat">Aluno e ano letivo</label>
+        <select id="mat" class="form-select" @bind="selecionada" @bind:after="CarregarBoletimAsync">
+            @foreach (var m in matriculas)
+            {
+                <option value="@m.Id">@m.Aluno!.Nome — @anos[m.AnoLetivoId] (@m.Turma!.Nome)</option>
+            }
+        </select>
+    </div>
+}
+
+@{ var atual = matriculas.First(m => m.Id == selecionada); }
+<p class="text-muted">
+    <strong>@atual.Aluno!.Nome</strong> · @atual.Turma!.Nome · @atual.Classe · ano letivo @anos[atual.AnoLetivoId]
+</p>
+
+@if (!decisao.Permitido)
+{
+    <div class="alert alert-warning" role="status">
+        <strong>Consulta de notas indisponível.</strong>
+        @Explicacao
+    </div>
+    return;
+}
+
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th>Disciplina</th>
+                <th class="text-center">1.º trimestre</th>
+                <th class="text-center">2.º trimestre</th>
+                <th class="text-center">3.º trimestre</th>
+                <th class="text-center">Média final</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var l in boletim)
+            {
+                <tr>
+                    <td class="fw-semibold">@l.Disciplina</td>
+                    @foreach (var t in new[] { l.T1, l.T2, l.T3 })
+                    {
+                        <td class="text-center"><Celula N="t" /></td>
+                    }
+                    <td class="text-center fw-semibold @Cor(l.MediaFinal)">@(l.MediaFinal?.ToString("0") ?? "—")</td>
+                </tr>
+            }
+            @if (boletim.Count == 0)
+            {
+                <tr><td colspan="5" class="text-center text-muted py-4">Ainda não há disciplinas para esta turma.</td></tr>
+            }
+        </tbody>
+    </table>
+</div>
+<p class="small text-muted mb-0">
+    MT = média de MAC, NPP e NPT. Nota positiva a partir de 10 valores (escala 0–20). Consulta somente leitura.
+</p>
+
+@code {
+    private sealed record LinhaBoletim(string Disciplina, NotasTrimestre T1, NotasTrimestre T2, NotasTrimestre T3)
+    {
+        public decimal? MediaFinal => NotasTrimestre.MediaFinal(T1, T2, T3);
+    }
+
+    private readonly DateOnly hoje = DateOnly.FromDateTime(DateTime.Today);
+    private Escola? escola;
+    private Dictionary<int, string> anos = [];
+    private List<Matricula> matriculas = [];
+    private List<LinhaBoletim> boletim = [];
+    private DecisaoAcesso decisao;
+    private int selecionada;
+
+    private string Explicacao => decisao.Motivo switch
+    {
+        MotivoAcesso.MensalidadeEmAtraso => "Existe uma mensalidade em atraso. Dirija-se à secretaria da escola para regularizar e recuperar o acesso.",
+        MotivoAcesso.BloqueadoPelaSecretaria => "O acesso foi suspenso pela secretaria da escola. Contacte a secretaria para mais informações.",
+        MotivoAcesso.AlunoSemAcessoProprio => "Até à 6.ª classe as notas são consultadas pelo encarregado de educação.",
+        _ => "Contacte a secretaria da escola."
+    };
+
+    private PerfilAcesso PerfilDeAcesso => Perfil == PerfilUtilizador.Aluno ? PerfilAcesso.Aluno : PerfilAcesso.Encarregado;
+
+    protected override async Task CarregarAsync()
+    {
+        if (EscolaId is not { } id || Perfil is null) return;
+        escola = await Db.Escolas.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id);
+        if (escola is null) return;
+
+        // Só as matrículas ligadas à própria conta: o aluno vê as suas; o encarregado, as dos seus educandos.
+        var alunoIds = Perfil == PerfilUtilizador.Aluno
+            ? await Db.Alunos.Where(a => a.UserId == UserId).Select(a => a.Id).ToListAsync()
+            : await Db.Encarregados.Where(e => e.UserId == UserId).SelectMany(e => e.Educandos).Select(a => a.Id).ToListAsync();
+
+        matriculas = await Db.Matriculas.AsNoTracking()
+            .Include(m => m.Aluno).Include(m => m.Turma).Include(m => m.Mensalidades)
+            .Where(m => alunoIds.Contains(m.AlunoId))
+            .OrderByDescending(m => m.AnoLetivoId).ThenBy(m => m.Aluno!.Nome)
+            .AsSplitQuery()
+            .ToListAsync();
+        anos = await Db.AnosLetivos.AsNoTracking().ToDictionaryAsync(a => a.Id, a => a.Designacao);
+        if (matriculas.Count == 0) return;
+
+        selecionada = matriculas[0].Id;
+        await CarregarBoletimAsync();
+    }
+
+    private async Task CarregarBoletimAsync()
+    {
+        boletim = [];
+        var m = matriculas.First(x => x.Id == selecionada);
+        decisao = m.PodeVerNotas(PerfilDeAcesso, escola!, hoje);
+        if (!decisao.Permitido) return; // as notas nem sequer são lidas da base de dados
+
+        var disciplinas = await (
+            from td in Db.TurmasDisciplinas.AsNoTracking()
+            join d in Db.Disciplinas.AsNoTracking() on td.DisciplinaId equals d.Id
+            where td.TurmaId == m.TurmaId
+            orderby d.Nome
+            select new { td.Id, d.Nome }).ToListAsync();
+        var notas = await Db.Notas.AsNoTracking().Where(n => n.MatriculaId == m.Id).ToListAsync();
+
+        NotasTrimestre De(int tdId, Trimestre t) =>
+            notas.FirstOrDefault(n => n.TurmaDisciplinaId == tdId && n.Trimestre == t)?.Valores ?? new(null, null, null);
+
+        boletim = disciplinas
+            .Select(d => new LinhaBoletim(d.Nome, De(d.Id, Trimestre.Primeiro), De(d.Id, Trimestre.Segundo), De(d.Id, Trimestre.Terceiro)))
+            .ToList();
+    }
+
+    private static string Cor(decimal? nota) => nota is { } n && n < NotasTrimestre.NotaMinimaPositiva ? "text-danger" : "";
+}

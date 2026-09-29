@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
+using Sigei.Domain;
 using Sigei.Web.Data;
 
 namespace Sigei.Web.Components;
@@ -16,12 +17,14 @@ public abstract class PaginaEscola : ComponentBase
 
     protected string UserId { get; private set; } = "";
     protected int? EscolaId { get; private set; }
+    protected PerfilUtilizador? Perfil { get; private set; }
 
     protected sealed override async Task OnInitializedAsync()
     {
         var user = (await Autenticacao.GetAuthenticationStateAsync()).User;
         UserId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         EscolaId = int.TryParse(user.FindFirstValue(SigeiClaims.EscolaId), out var id) ? id : null;
+        Perfil = Enum.TryParse<PerfilUtilizador>(user.FindFirstValue(SigeiClaims.Perfil), out var perfil) ? perfil : null;
         Tenant.Definir(EscolaId);
         await CarregarAsync();
     }

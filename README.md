@@ -11,7 +11,7 @@ SaaS multi-escola para o ensino angolano (Iniciação à 13.ª classe), em C# / 
 
 ## Demonstração local
 Em desenvolvimento cria-se automaticamente uma escola fictícia com 5 contas (direção, secretaria, professor, aluno da 8.ª, encarregado da 5.ª),
-palavra-passe `Sigei@Demo2026`. Ecrã da secretaria: `/secretaria/acesso-notas`.
+palavra-passe `Sigei@Demo2026`. Ecrãs: secretaria `/secretaria/acesso-notas`, professor `/professor/notas`, aluno/encarregado `/portal/notas`.
 
 ## Correr
 ```

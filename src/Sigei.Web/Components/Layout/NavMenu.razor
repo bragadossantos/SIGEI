@@ -26,6 +26,22 @@
             </div>
         </AuthorizeView>
 
+        <AuthorizeView Policy="@Sigei.Web.Data.Politicas.ConsultarNotas" Context="portal">
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="portal/notas">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Notas
+                </NavLink>
+            </div>
+        </AuthorizeView>
+
+        <AuthorizeView Policy="@Sigei.Web.Data.Politicas.LancarNotas" Context="prof">
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="professor/notas">
+                    <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Lançar notas
+                </NavLink>
+            </div>
+        </AuthorizeView>
+
         <AuthorizeView>
             <Authorized>
                 <div class="nav-item px-3">

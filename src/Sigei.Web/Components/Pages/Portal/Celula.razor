@@ -1,0 +1,22 @@
+@using Sigei.Domain
+
+@if (N.Mt is { } mt)
+{
+    <div class="fw-semibold @(mt < NotasTrimestre.NotaMinimaPositiva ? "text-danger" : "")">@mt.ToString("0")</div>
+    <div class="small text-muted">MAC @Fmt(N.Mac) · NPP @Fmt(N.Npp) · NPT @Fmt(N.Npt)</div>
+}
+else if (N.Mac is null && N.Npp is null && N.Npt is null)
+{
+    <span class="text-muted">—</span>
+}
+else
+{
+    <div class="text-muted">incompleto</div>
+    <div class="small text-muted">MAC @Fmt(N.Mac) · NPP @Fmt(N.Npp) · NPT @Fmt(N.Npt)</div>
+}
+
+@code {
+    [Parameter, EditorRequired] public NotasTrimestre N { get; set; } = default!;
+
+    private static string Fmt(decimal? v) => v?.ToString("0.#") ?? "–";
+}

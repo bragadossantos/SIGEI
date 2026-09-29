@@ -1,0 +1,206 @@
+@page "/professor/notas"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = Politicas.LancarNotas)]
+@inherits PaginaEscola
+@using Microsoft.EntityFrameworkCore
+@using Sigei.Domain
+@using Sigei.Web.Data
+@inject ApplicationDbContext Db
+
+<PageTitle>Lançar notas</PageTitle>
+
+<h1 class="h3 mb-1">Lançar notas</h1>
+<p class="text-muted">Escala de 0 a 20. A MT calcula-se sozinha: (MAC + NPP + NPT) ÷ 3.</p>
+
+@if (escola is null)
+{
+    <div class="alert alert-warning">Não foi possível identificar a sua escola.</div>
+    return;
+}
+
+@if (!editavel)
+{
+    <div class="alert alert-warning">A licença da escola não está ativa: o lançamento de notas está desativado.</div>
+}
+
+@if (atribuicoes.Count == 0)
+{
+    <div class="alert alert-info">Ainda não tem turmas e disciplinas atribuídas neste ano letivo. Fale com a secretaria.</div>
+    return;
+}
+
+<div class="d-flex flex-wrap gap-3 mb-3">
+    <div>
+        <label class="form-label small mb-0" for="atrib">Turma e disciplina</label>
+        <select id="atrib" class="form-select" @bind="atribuicaoId" @bind:after="CarregarLinhasAsync">
+            @foreach (var a in atribuicoes)
+            {
+                <option value="@a.Id">@a.Turma — @a.Disciplina</option>
+            }
+        </select>
+    </div>
+    <div>
+        <label class="form-label small mb-0" for="tri">Trimestre</label>
+        <select id="tri" class="form-select" @bind="trimestre" @bind:after="CarregarLinhasAsync">
+            <option value="@Trimestre.Primeiro">1.º trimestre</option>
+            <option value="@Trimestre.Segundo">2.º trimestre</option>
+            <option value="@Trimestre.Terceiro">3.º trimestre</option>
+        </select>
+    </div>
+</div>
+
+@if (mensagem is not null)
+{
+    <div class="alert @(erro ? "alert-danger" : "alert-success") py-2" role="status">@mensagem</div>
+}
+
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th>Aluno</th>
+                <th style="width: 7rem">MAC</th>
+                <th style="width: 7rem">NPP</th>
+                <th style="width: 7rem">NPT</th>
+                <th class="text-center" style="width: 5rem">MT</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var l in linhas)
+            {
+                <tr class="@(l.Alterada ? "table-warning" : "")">
+                    <td>@l.Nome</td>
+                    <td><input type="number" class="form-control form-control-sm" min="0" max="20" step="0.5" aria-label="MAC de @l.Nome" disabled="@(!editavel)" @bind="l.Mac" @bind:event="oninput" /></td>
+                    <td><input type="number" class="form-control form-control-sm" min="0" max="20" step="0.5" aria-label="NPP de @l.Nome" disabled="@(!editavel)" @bind="l.Npp" @bind:event="oninput" /></td>
+                    <td><input type="number" class="form-control form-control-sm" min="0" max="20" step="0.5" aria-label="NPT de @l.Nome" disabled="@(!editavel)" @bind="l.Npt" @bind:event="oninput" /></td>
+                    <td class="text-center fw-semibold @(l.Valores.Positiva == false ? "text-danger" : "")">@(l.Valores.Mt?.ToString("0") ?? "—")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<button class="btn btn-primary" disabled="@(!editavel || !linhas.Any(l => l.Alterada))" @onclick="GuardarAsync">
+    Guardar notas@(linhas.Count(l => l.Alterada) is > 0 and var n ? $" ({n})" : "")
+</button>
+
+@code {
+    private sealed class Linha
+    {
+        public int MatriculaId { get; init; }
+        public required string Nome { get; init; }
+        public decimal? Mac { get; set; }
+        public decimal? Npp { get; set; }
+        public decimal? Npt { get; set; }
+        public decimal? MacOriginal { get; init; }
+        public decimal? NppOriginal { get; init; }
+        public decimal? NptOriginal { get; init; }
+
+        public NotasTrimestre Valores => new(Mac, Npp, Npt);
+        public bool Alterada => Mac != MacOriginal || Npp != NppOriginal || Npt != NptOriginal;
+    }
+
+    private sealed record Atribuicao(int Id, int TurmaId, string Turma, string Disciplina);
+
+    private readonly DateOnly hoje = DateOnly.FromDateTime(DateTime.Today);
+    private Escola? escola;
+    private AnoLetivo? ano;
+    private List<Atribuicao> atribuicoes = [];
+    private List<Linha> linhas = [];
+    private int atribuicaoId;
+    private Trimestre trimestre = Trimestre.Primeiro;
+    private bool editavel;
+    private bool erro;
+    private string? mensagem;
+
+    protected override async Task CarregarAsync()
+    {
+        if (EscolaId is not { } id) return;
+        escola = await Db.Escolas.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id);
+        if (escola is null) return;
+        editavel = escola.EstadoLicenca(hoje) == EstadoLicenca.Valida;
+
+        ano = await Db.AnosLetivos.AsNoTracking().Where(a => a.Estado == EstadoAnoLetivo.Aberto).OrderByDescending(a => a.Inicio).FirstOrDefaultAsync();
+        if (ano is null) return;
+
+        // Só as turmas e disciplinas atribuídas a este professor.
+        atribuicoes = await (
+            from td in Db.TurmasDisciplinas.AsNoTracking()
+            join t in Db.Turmas.AsNoTracking() on td.TurmaId equals t.Id
+            join d in Db.Disciplinas.AsNoTracking() on td.DisciplinaId equals d.Id
+            where td.ProfessorUserId == UserId && t.AnoLetivoId == ano.Id
+            orderby t.ClasseNumero, t.Nome, d.Nome
+            select new Atribuicao(td.Id, t.Id, t.Nome, d.Nome)).ToListAsync();
+        if (atribuicoes.Count == 0) return;
+
+        atribuicaoId = atribuicoes[0].Id;
+        await CarregarLinhasAsync();
+    }
+
+    private async Task CarregarLinhasAsync()
+    {
+        mensagem = null;
+        var atrib = atribuicoes.First(a => a.Id == atribuicaoId);
+        var matriculas = await Db.Matriculas.AsNoTracking()
+            .Include(m => m.Aluno)
+            .Where(m => m.TurmaId == atrib.TurmaId && m.AnoLetivoId == ano!.Id)
+            .OrderBy(m => m.Aluno!.Nome).ToListAsync();
+        var notas = await Db.Notas.AsNoTracking()
+            .Where(n => n.TurmaDisciplinaId == atribuicaoId && n.Trimestre == trimestre).ToListAsync();
+
+        linhas = matriculas.Select(m =>
+        {
+            var n = notas.FirstOrDefault(x => x.MatriculaId == m.Id);
+            return new Linha
+            {
+                MatriculaId = m.Id, Nome = m.Aluno!.Nome,
+                Mac = n?.Mac, Npp = n?.Npp, Npt = n?.Npt,
+                MacOriginal = n?.Mac, NppOriginal = n?.Npp, NptOriginal = n?.Npt
+            };
+        }).ToList();
+    }
+
+    private async Task GuardarAsync()
+    {
+        erro = true;
+        if (!editavel) return;
+
+        // Volta a confirmar na base de dados que esta atribuição é mesmo deste professor.
+        var minha = await Db.TurmasDisciplinas.AnyAsync(td => td.Id == atribuicaoId && td.ProfessorUserId == UserId);
+        if (!minha) { mensagem = "Não tem permissão para lançar notas nesta turma e disciplina."; return; }
+
+        var alteradas = linhas.Where(l => l.Alterada).ToList();
+        var invalida = alteradas.FirstOrDefault(l => new[] { l.Mac, l.Npp, l.Npt }.Any(v => v is < 0 or > 20));
+        if (invalida is not null) { mensagem = $"As notas de {invalida.Nome} têm de estar entre 0 e 20."; return; }
+
+        var ids = alteradas.Select(l => l.MatriculaId).ToList();
+        var existentes = await Db.Notas
+            .Where(n => n.TurmaDisciplinaId == atribuicaoId && n.Trimestre == trimestre && ids.Contains(n.MatriculaId))
+            .ToListAsync();
+
+        foreach (var l in alteradas)
+        {
+            var nota = existentes.FirstOrDefault(n => n.MatriculaId == l.MatriculaId);
+            if (nota is null)
+            {
+                nota = new Nota { MatriculaId = l.MatriculaId, TurmaDisciplinaId = atribuicaoId, Trimestre = trimestre };
+                Db.Notas.Add(nota);
+            }
+            Db.Alteracoes.Add(new RegistoAlteracao
+            {
+                UserId = UserId, Entidade = nameof(Nota), EntidadeId = $"{l.MatriculaId}/{atribuicaoId}/{(int)trimestre}",
+                Acao = "Lancamento",
+                ValorAnterior = $"MAC={Fmt(l.MacOriginal)};NPP={Fmt(l.NppOriginal)};NPT={Fmt(l.NptOriginal)}",
+                ValorNovo = $"MAC={Fmt(l.Mac)};NPP={Fmt(l.Npp)};NPT={Fmt(l.Npt)}"
+            });
+            nota.Mac = l.Mac; nota.Npp = l.Npp; nota.Npt = l.Npt;
+        }
+        await Db.SaveChangesAsync();
+
+        await CarregarLinhasAsync();
+        erro = false;
+        mensagem = $"{alteradas.Count} nota(s) guardada(s).";
+    }
+
+    private static string Fmt(decimal? v) => v?.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+}
