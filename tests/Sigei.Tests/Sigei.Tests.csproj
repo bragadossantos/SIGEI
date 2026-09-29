@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sigei.Domain\Sigei.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Sigei.Web\Sigei.Web.csproj" />
   </ItemGroup>
 
 </Project>
