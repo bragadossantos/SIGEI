@@ -1,0 +1,243 @@
+@page "/secretaria/turmas"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = Politicas.AssociarDisciplinasATurmas)]
+@inherits PaginaEscola
+@using Microsoft.EntityFrameworkCore
+@using Sigei.Domain
+@using Sigei.Web.Data
+@inject ApplicationDbContext Db
+
+<PageTitle>Turmas</PageTitle>
+
+<h1 class="h3 mb-1">Turmas e disciplinas</h1>
+
+@if (ano is null)
+{
+    <div class="alert alert-info">Não há nenhum ano letivo aberto. A direção deve abrir um ano letivo primeiro.</div>
+    return;
+}
+
+<p class="text-muted">Ano letivo @ano.Designacao</p>
+
+@if (mensagem is not null)
+{
+    <div class="alert @(erro ? "alert-danger" : "alert-success") py-2" role="status">@mensagem</div>
+}
+
+<div class="card mb-4">
+    <div class="card-header">Nova turma</div>
+    <form class="card-body row g-2 align-items-end" @onsubmit="CriarTurmaAsync" @onsubmit:preventDefault>
+        <div class="col-6 col-md-3">
+            <label class="form-label small mb-0" for="tn">Nome</label>
+            <input id="tn" class="form-control" placeholder="7.ª A" maxlength="30" @bind="novaNome" @bind:event="oninput" />
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small mb-0" for="tc">Classe</label>
+            <select id="tc" class="form-select" @bind="novaClasse">
+                @for (var n = Classe.Iniciacao; n <= Classe.Maxima; n++)
+                {
+                    <option value="@n">@(new Classe(n))</option>
+                }
+            </select>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small mb-0" for="tm">Mensalidade (Kz)</label>
+            <input id="tm" type="number" min="0" step="500" class="form-control" @bind="novaMensalidade" />
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" type="submit" disabled="@string.IsNullOrWhiteSpace(novaNome)">Criar turma</button>
+        </div>
+    </form>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="list-group">
+            @foreach (var t in turmas)
+            {
+                <button type="button" class="list-group-item list-group-item-action @(t.Id == turmaId ? "active" : "")" @onclick="() => EscolherAsync(t.Id)">
+                    <div class="fw-semibold">@t.Nome</div>
+                    <div class="small @(t.Id == turmaId ? "" : "text-muted")">@(new Classe(t.ClasseNumero)) · @t.MensalidadeKz.ToString("N0") Kz</div>
+                </button>
+            }
+            @if (turmas.Count == 0)
+            {
+                <div class="list-group-item text-muted">Ainda não há turmas.</div>
+            }
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        @if (turmaAtual is not null)
+        {
+            <h2 class="h5">@turmaAtual.Nome — disciplinas e professores</h2>
+            <table class="table align-middle">
+                <thead><tr><th>Disciplina</th><th>Professor</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var a in atribuicoes)
+                    {
+                        <tr>
+                            <td>@a.Disciplina</td>
+                            <td>
+                                <select class="form-select form-select-sm" aria-label="Professor de @a.Disciplina"
+                                        value="@a.ProfessorId" @onchange="e => DefinirProfessorAsync(a.Id, e.Value?.ToString())">
+                                    <option value="">— sem professor —</option>
+                                    @foreach (var p in professores)
+                                    {
+                                        <option value="@p.Id">@p.NomeCompleto</option>
+                                    }
+                                </select>
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoverAsync(a)">Retirar</button>
+                            </td>
+                        </tr>
+                    }
+                    @if (atribuicoes.Count == 0)
+                    {
+                        <tr><td colspan="3" class="text-muted">Nenhuma disciplina atribuída a esta turma.</td></tr>
+                    }
+                </tbody>
+            </table>
+
+            @if (disponiveis.Count > 0)
+            {
+                <div class="d-flex gap-2 align-items-end">
+                    <div>
+                        <label class="form-label small mb-0" for="nd">Acrescentar disciplina</label>
+                        <select id="nd" class="form-select" @bind="disciplinaNova">
+                            <option value="0">— escolher —</option>
+                            @foreach (var d in disponiveis)
+                            {
+                                <option value="@d.Id">@d.Nome</option>
+                            }
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" disabled="@(disciplinaNova == 0)" @onclick="AcrescentarAsync">Acrescentar</button>
+                </div>
+            }
+        }
+        else if (turmas.Count > 0)
+        {
+            <p class="text-muted">Escolha uma turma à esquerda.</p>
+        }
+    </div>
+</div>
+
+@code {
+    private sealed record Atrib(int Id, int DisciplinaId, string Disciplina, string? ProfessorId);
+
+    private AnoLetivo? ano;
+    private List<Turma> turmas = [];
+    private List<Atrib> atribuicoes = [];
+    private List<Disciplina> disponiveis = [];
+    private List<ApplicationUser> professores = [];
+    private int turmaId, disciplinaNova, novaClasse = 1;
+    private decimal novaMensalidade = 25000;
+    private string novaNome = "";
+    private string? mensagem;
+    private bool erro;
+
+    private Turma? turmaAtual => turmas.FirstOrDefault(t => t.Id == turmaId);
+
+    protected override async Task CarregarAsync()
+    {
+        if (EscolaId is not { } id) return;
+        ano = await Db.AnosLetivos.AsNoTracking().Where(a => a.Estado == EstadoAnoLetivo.Aberto).OrderByDescending(a => a.Inicio).FirstOrDefaultAsync();
+        if (ano is null) return;
+
+        // Os utilizadores não têm filtro automático por escola: filtra-se aqui de forma explícita.
+        professores = await Db.Users.AsNoTracking()
+            .Where(u => u.EscolaId == id && u.Perfil == PerfilUtilizador.Professor)
+            .OrderBy(u => u.NomeCompleto).ToListAsync();
+        await RecarregarTurmasAsync();
+        if (turmaId == 0 && turmas.Count > 0) await EscolherAsync(turmas[0].Id);
+    }
+
+    private async Task RecarregarTurmasAsync() =>
+        turmas = await Db.Turmas.AsNoTracking().Where(t => t.AnoLetivoId == ano!.Id).OrderBy(t => t.ClasseNumero).ThenBy(t => t.Nome).ToListAsync();
+
+    private async Task EscolherAsync(int id)
+    {
+        turmaId = id;
+        disciplinaNova = 0;
+        atribuicoes = await (
+            from td in Db.TurmasDisciplinas.AsNoTracking()
+            join d in Db.Disciplinas.AsNoTracking() on td.DisciplinaId equals d.Id
+            where td.TurmaId == id
+            orderby d.Nome
+            select new Atrib(td.Id, d.Id, d.Nome, td.ProfessorUserId)).ToListAsync();
+        var usadas = atribuicoes.Select(a => a.DisciplinaId).ToList();
+        disponiveis = await Db.Disciplinas.AsNoTracking().Where(d => d.Ativa && !usadas.Contains(d.Id)).OrderBy(d => d.Nome).ToListAsync();
+    }
+
+    private async Task CriarTurmaAsync()
+    {
+        var nome = novaNome.Trim();
+        erro = true;
+        if (nome.Length == 0) return;
+        if (novaMensalidade < 0) { mensagem = "A mensalidade não pode ser negativa."; return; }
+        if (turmas.Any(t => string.Equals(t.Nome, nome, StringComparison.CurrentCultureIgnoreCase)))
+        {
+            mensagem = $"Já existe a turma \"{nome}\" neste ano letivo.";
+            return;
+        }
+        var t = new Turma { AnoLetivoId = ano!.Id, Nome = nome, ClasseNumero = novaClasse, MensalidadeKz = novaMensalidade };
+        Db.Turmas.Add(t);
+        await Db.SaveChangesAsync();
+        Db.Alteracoes.Add(new RegistoAlteracao { UserId = UserId, Entidade = nameof(Turma), EntidadeId = t.Id.ToString(), Acao = "Criada", ValorNovo = $"{nome} ({new Classe(novaClasse)})" });
+        await Db.SaveChangesAsync();
+        novaNome = "";
+        erro = false;
+        mensagem = $"Turma \"{nome}\" criada.";
+        await RecarregarTurmasAsync();
+        await EscolherAsync(t.Id);
+    }
+
+    private async Task AcrescentarAsync()
+    {
+        if (disciplinaNova == 0) return;
+        // A disciplina tem de estar ativa (não se confia só no que a lista mostrava).
+        if (!await Db.Disciplinas.AnyAsync(d => d.Id == disciplinaNova && d.Ativa)) return;
+        Db.TurmasDisciplinas.Add(new TurmaDisciplina { TurmaId = turmaId, DisciplinaId = disciplinaNova });
+        await Db.SaveChangesAsync();
+        erro = false;
+        mensagem = "Disciplina acrescentada.";
+        await EscolherAsync(turmaId);
+    }
+
+    private async Task DefinirProfessorAsync(int atribuicaoId, string? professorId)
+    {
+        var td = await Db.TurmasDisciplinas.FirstAsync(x => x.Id == atribuicaoId);
+        var novo = string.IsNullOrEmpty(professorId) ? null : professorId;
+        if (novo is not null && !professores.Any(p => p.Id == novo)) return; // só professores desta escola
+        Db.Alteracoes.Add(new RegistoAlteracao
+        {
+            UserId = UserId, Entidade = nameof(TurmaDisciplina), EntidadeId = td.Id.ToString(), Acao = "Professor",
+            ValorAnterior = td.ProfessorUserId, ValorNovo = novo
+        });
+        td.ProfessorUserId = novo;
+        await Db.SaveChangesAsync();
+        erro = false;
+        mensagem = "Professor atualizado.";
+        await EscolherAsync(turmaId);
+    }
+
+    private async Task RemoverAsync(Atrib a)
+    {
+        // Com notas lançadas, retirar a disciplina apagaria o histórico: não é permitido.
+        if (await Db.Notas.AnyAsync(n => n.TurmaDisciplinaId == a.Id))
+        {
+            erro = true;
+            mensagem = $"Não é possível retirar \"{a.Disciplina}\": já tem notas lançadas.";
+            return;
+        }
+        var td = await Db.TurmasDisciplinas.FirstAsync(x => x.Id == a.Id);
+        Db.TurmasDisciplinas.Remove(td);
+        Db.Alteracoes.Add(new RegistoAlteracao { UserId = UserId, Entidade = nameof(TurmaDisciplina), EntidadeId = a.Id.ToString(), Acao = "Retirada", ValorAnterior = a.Disciplina });
+        await Db.SaveChangesAsync();
+        erro = false;
+        mensagem = $"\"{a.Disciplina}\" retirada da turma.";
+        await EscolherAsync(turmaId);
+    }
+}

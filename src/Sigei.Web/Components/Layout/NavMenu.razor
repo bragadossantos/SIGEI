@@ -26,6 +26,30 @@
             </div>
         </AuthorizeView>
 
+        <AuthorizeView Policy="@Sigei.Web.Data.Politicas.AssociarDisciplinasATurmas" Context="m1">
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="secretaria/turmas">
+                    <span class="bi bi-list-nested-nav-menu-nav-menu" aria-hidden="true"></span> Turmas
+                </NavLink>
+            </div>
+        </AuthorizeView>
+
+        <AuthorizeView Policy="@Sigei.Web.Data.Politicas.GerirCurriculoDisciplinas" Context="m2">
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="direcao/disciplinas">
+                    <span class="bi bi-list-nested-nav-menu-nav-menu" aria-hidden="true"></span> Disciplinas
+                </NavLink>
+            </div>
+        </AuthorizeView>
+
+        <AuthorizeView Policy="@Sigei.Web.Data.Politicas.GerirDefinicoesEscola" Context="m3">
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="direcao/definicoes">
+                    <span class="bi bi-list-nested-nav-menu-nav-menu" aria-hidden="true"></span> Definições
+                </NavLink>
+            </div>
+        </AuthorizeView>
+
         <AuthorizeView Policy="@Sigei.Web.Data.Politicas.ConsultarNotas" Context="portal">
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="portal/notas">

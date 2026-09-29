@@ -1,0 +1,97 @@
+@page "/direcao/disciplinas"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = Politicas.GerirCurriculoDisciplinas)]
+@inherits PaginaEscola
+@using Microsoft.EntityFrameworkCore
+@using Sigei.Domain
+@using Sigei.Web.Data
+@inject ApplicationDbContext Db
+
+<PageTitle>Disciplinas</PageTitle>
+
+<h1 class="h3 mb-1">Disciplinas do currículo</h1>
+<p class="text-muted">
+    As disciplinas não se eliminam: ao <strong>desativar</strong>, deixam de poder ser atribuídas a novas turmas,
+    mas as notas já lançadas mantêm-se no histórico.
+</p>
+
+@if (mensagem is not null)
+{
+    <div class="alert @(erro ? "alert-danger" : "alert-success") py-2" role="status">@mensagem</div>
+}
+
+<form class="row g-2 mb-4" @onsubmit="AdicionarAsync" @onsubmit:preventDefault>
+    <div class="col-12 col-sm-8 col-md-6">
+        <label class="visually-hidden" for="nome">Nome da disciplina</label>
+        <input id="nome" class="form-control" placeholder="Nome da nova disciplina" maxlength="80" @bind="nome" @bind:event="oninput" />
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-primary" type="submit" disabled="@string.IsNullOrWhiteSpace(nome)">Adicionar</button>
+    </div>
+</form>
+
+<table class="table align-middle">
+    <thead><tr><th>Disciplina</th><th>Estado</th><th></th></tr></thead>
+    <tbody>
+        @foreach (var d in disciplinas)
+        {
+            <tr>
+                <td class="@(d.Ativa ? "" : "text-muted")">@d.Nome</td>
+                <td>
+                    @if (d.Ativa) { <span class="badge text-bg-success">Ativa</span> }
+                    else { <span class="badge text-bg-secondary">Desativada</span> }
+                </td>
+                <td class="text-end">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => AlternarAsync(d)">
+                        @(d.Ativa ? "Desativar" : "Reativar")
+                    </button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<Disciplina> disciplinas = [];
+    private string nome = "";
+    private string? mensagem;
+    private bool erro;
+
+    protected override async Task CarregarAsync() =>
+        disciplinas = await Db.Disciplinas.OrderByDescending(d => d.Ativa).ThenBy(d => d.Nome).ToListAsync();
+
+    private async Task AdicionarAsync()
+    {
+        var n = nome.Trim();
+        if (n.Length == 0) return;
+        erro = true;
+        if (disciplinas.Any(d => string.Equals(d.Nome, n, StringComparison.CurrentCultureIgnoreCase)))
+        {
+            mensagem = $"Já existe uma disciplina chamada \"{n}\".";
+            return;
+        }
+        var d = new Disciplina { Nome = n };
+        Db.Disciplinas.Add(d);
+        await Db.SaveChangesAsync();
+        Db.Alteracoes.Add(new RegistoAlteracao { UserId = UserId, Entidade = nameof(Disciplina), EntidadeId = d.Id.ToString(), Acao = "Criada", ValorNovo = n });
+        await Db.SaveChangesAsync();
+        nome = "";
+        erro = false;
+        mensagem = $"Disciplina \"{n}\" adicionada.";
+        await CarregarAsync();
+    }
+
+    private async Task AlternarAsync(Disciplina d)
+    {
+        d.Ativa = !d.Ativa;
+        Db.Alteracoes.Add(new RegistoAlteracao
+        {
+            UserId = UserId, Entidade = nameof(Disciplina), EntidadeId = d.Id.ToString(),
+            Acao = d.Ativa ? "Reativada" : "Desativada", ValorAnterior = (!d.Ativa).ToString(), ValorNovo = d.Ativa.ToString()
+        });
+        await Db.SaveChangesAsync();
+        erro = false;
+        mensagem = $"\"{d.Nome}\" {(d.Ativa ? "reativada" : "desativada")}.";
+        await CarregarAsync();
+    }
+}

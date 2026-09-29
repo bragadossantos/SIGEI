@@ -10,6 +10,10 @@ public static class Politicas
     public static string Nome(Permissao p) => $"Permissao:{p}";
 
     public const string GerirCurriculoDisciplinas = "Permissao:GerirCurriculoDisciplinas";
+    public const string AssociarDisciplinasATurmas = "Permissao:AssociarDisciplinasATurmas";
+    public const string GerirMatriculasETurmas = "Permissao:GerirMatriculasETurmas";
+    public const string AbrirFecharAnoLetivo = "Permissao:AbrirFecharAnoLetivo";
+    public const string GerirDefinicoesEscola = "Permissao:GerirDefinicoesEscola";
     public const string DecidirAcessoNotas = "Permissao:DecidirAcessoNotas";
     public const string GerirMensalidades = "Permissao:GerirMensalidades";
     public const string LancarNotas = "Permissao:LancarNotas";

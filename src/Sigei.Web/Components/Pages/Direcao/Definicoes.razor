@@ -1,0 +1,93 @@
+@page "/direcao/definicoes"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = Politicas.GerirDefinicoesEscola)]
+@inherits PaginaEscola
+@using Microsoft.EntityFrameworkCore
+@using Sigei.Domain
+@using Sigei.Web.Data
+@inject ApplicationDbContext Db
+
+<PageTitle>Definições da escola</PageTitle>
+
+<h1 class="h3 mb-3">Definições da escola</h1>
+
+@if (escola is null)
+{
+    <div class="alert alert-warning">Não foi possível identificar a sua escola.</div>
+    return;
+}
+
+@if (mensagem is not null)
+{
+    <div class="alert alert-success py-2" role="status">@mensagem</div>
+}
+
+<EditForm Model="escola" OnValidSubmit="GuardarAsync" FormName="definicoes">
+    <div class="mb-3">
+        <strong>@escola.Nome</strong>
+        <div class="small text-muted">Licença válida até @escola.LicencaValidaAte.ToString("dd/MM/yyyy")</div>
+    </div>
+
+    <div class="form-check form-switch mb-3">
+        <InputCheckbox id="bloqueio" class="form-check-input" role="switch" @bind-Value="escola.BloqueioPorMensalidadeAtivo" />
+        <label class="form-check-label" for="bloqueio">
+            Encarregados só veem as notas com a mensalidade em dia
+        </label>
+        <div class="form-text">A secretaria pode sempre liberar ou bloquear um aluno em particular.</div>
+    </div>
+
+    <div class="form-check form-switch mb-3">
+        <InputCheckbox id="sec" class="form-check-input" role="switch" @bind-Value="escola.SecretariaGereDisciplinas" />
+        <label class="form-check-label" for="sec">A secretaria pode gerir o currículo (criar e desativar disciplinas)</label>
+        <div class="form-text">Recomendado desligado: um erro no currículo afeta as pautas de todos os alunos.</div>
+    </div>
+
+    <div class="row g-3 mb-3" style="max-width: 32rem">
+        <div class="col-6">
+            <label class="form-label" for="tol">Dias de tolerância</label>
+            <InputNumber id="tol" class="form-control" @bind-Value="escola.DiasToleranciaMensalidade" min="0" max="60" />
+            <div class="form-text">Depois do vencimento.</div>
+        </div>
+        <div class="col-6">
+            <label class="form-label" for="nm">Nº de mensalidades</label>
+            <InputNumber id="nm" class="form-control" @bind-Value="escola.NumeroMensalidades" min="1" max="12" />
+            <div class="form-text">Ex.: 10 = Set. a Jun.</div>
+        </div>
+    </div>
+
+    @if (erro is not null) { <div class="alert alert-danger py-2">@erro</div> }
+    <button class="btn btn-primary" type="submit">Guardar definições</button>
+</EditForm>
+
+@code {
+    private Escola? escola;
+    private string? mensagem, erro;
+    private string antes = "";
+
+    protected override async Task CarregarAsync()
+    {
+        if (EscolaId is not { } id) return;
+        escola = await Db.Escolas.FirstOrDefaultAsync(e => e.Id == id);
+        antes = Resumo();
+    }
+
+    private string Resumo() => escola is null ? "" :
+        $"bloqueio={escola.BloqueioPorMensalidadeAtivo};secretariaCurriculo={escola.SecretariaGereDisciplinas};tolerancia={escola.DiasToleranciaMensalidade};mensalidades={escola.NumeroMensalidades}";
+
+    private async Task GuardarAsync()
+    {
+        mensagem = erro = null;
+        if (escola is null) return;
+        if (escola.DiasToleranciaMensalidade is < 0 or > 60) { erro = "A tolerância deve estar entre 0 e 60 dias."; return; }
+        if (escola.NumeroMensalidades is < 1 or > 12) { erro = "O número de mensalidades deve estar entre 1 e 12."; return; }
+
+        Db.Alteracoes.Add(new RegistoAlteracao
+        {
+            UserId = UserId, Entidade = nameof(Escola), EntidadeId = escola.Id.ToString(), Acao = "Definicoes",
+            ValorAnterior = antes, ValorNovo = Resumo()
+        });
+        await Db.SaveChangesAsync();
+        antes = Resumo();
+        mensagem = "Definições guardadas.";
+    }
+}
