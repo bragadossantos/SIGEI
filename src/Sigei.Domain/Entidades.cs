@@ -8,12 +8,18 @@ public interface IPertenceEscola
 
 public enum EstadoLicenca { Valida, SoLeitura, Expirada, Suspensa }
 
+public enum PlanoLicenca { Teste, Pequena, Media, Grande }
+
 public class Escola
 {
     public int Id { get; set; }
     public required string Nome { get; set; }
     public DateOnly LicencaValidaAte { get; set; }
     public bool Ativa { get; set; } = true;
+    public PlanoLicenca Plano { get; set; } = PlanoLicenca.Teste;
+
+    /// <summary>Número de alunos incluído no plano (0 = sem limite). Ultrapassar avisa, não bloqueia matrículas.</summary>
+    public int LimiteAlunos { get; set; }
     public bool BloqueioPorMensalidadeAtivo { get; set; } = true;
     public bool SecretariaGereDisciplinas { get; set; }
     public int DiasToleranciaMensalidade { get; set; } = 5;
@@ -23,6 +29,14 @@ public class Escola
     public EstadoLicenca EstadoLicenca(DateOnly hoje) => CalcularEstado(Ativa, LicencaValidaAte, hoje);
 
     public const int DiasDeCarencia = 30;
+
+    /// <summary>
+    /// Nova data de validade ao renovar por N meses: se a licença ainda está válida, soma-se ao fim atual
+    /// (a escola não perde dias pagos); se já expirou, conta a partir de hoje.
+    /// </summary>
+    public static DateOnly RenovarValidade(DateOnly validaAte, DateOnly hoje, int meses) =>
+        (validaAte >= hoje ? validaAte : hoje).AddMonths(meses);
+
 
     public static EstadoLicenca CalcularEstado(bool ativa, DateOnly validaAte, DateOnly hoje) =>
         !ativa ? Domain.EstadoLicenca.Suspensa

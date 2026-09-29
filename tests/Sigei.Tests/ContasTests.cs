@@ -62,3 +62,20 @@ public class AdministracaoDaPlataformaTests
             Assert.False(MatrizPermissoes.Tem(PerfilUtilizador.AdminSaas, perm, true), $"AdminSaas não deve ter {perm}");
     }
 }
+
+public class RenovacaoDeLicencaTests
+{
+    private static readonly DateOnly Hoje = new(2026, 10, 1);
+
+    [Fact]
+    public void Licenca_ainda_valida_soma_ao_fim_atual() =>
+        Assert.Equal(new DateOnly(2027, 1, 31), Escola.RenovarValidade(new(2026, 12, 31), Hoje, 1));
+
+    [Fact]
+    public void Licenca_expirada_conta_a_partir_de_hoje() =>
+        Assert.Equal(new DateOnly(2027, 1, 1), Escola.RenovarValidade(new(2026, 6, 30), Hoje, 3));
+
+    [Fact]
+    public void Renovar_por_um_ano() =>
+        Assert.Equal(new DateOnly(2027, 10, 1), Escola.RenovarValidade(Hoje, Hoje, 12));
+}

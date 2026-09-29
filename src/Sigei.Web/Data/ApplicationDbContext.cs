@@ -31,6 +31,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<ApplicationUser>().Property(u => u.Perfil).HasConversion<string>().HasMaxLength(20);
 
         b.Entity<Escola>().HasIndex(e => e.Nome);
+        b.Entity<Escola>().Property(e => e.Plano).HasConversion<string>().HasMaxLength(12);
         b.Entity<AnoLetivo>().HasIndex(a => new { a.EscolaId, a.Designacao }).IsUnique();
         b.Entity<Disciplina>().HasIndex(d => new { d.EscolaId, d.Nome }).IsUnique();
         b.Entity<Turma>().HasIndex(t => new { t.AnoLetivoId, t.Nome }).IsUnique();

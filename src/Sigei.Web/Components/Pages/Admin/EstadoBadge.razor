@@ -1,0 +1,21 @@
+@using Sigei.Domain
+
+@switch (Estado)
+{
+    case EstadoLicenca.Valida:
+        <span class="badge text-bg-success">Válida</span>
+        break;
+    case EstadoLicenca.SoLeitura:
+        <span class="badge text-bg-warning">Só leitura (carência)</span>
+        break;
+    case EstadoLicenca.Expirada:
+        <span class="badge text-bg-danger">Expirada</span>
+        break;
+    default:
+        <span class="badge text-bg-dark">Suspensa</span>
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired] public EstadoLicenca Estado { get; set; }
+}

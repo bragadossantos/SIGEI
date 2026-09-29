@@ -1,0 +1,304 @@
+@page "/admin/escolas"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = Politicas.AdministrarPlataforma)]
+@inherits PaginaEscola
+@using Microsoft.EntityFrameworkCore
+@using Sigei.Domain
+@using Sigei.Web.Data
+@inject ApplicationDbContext Db
+@inject GestaoContas Contas
+
+<PageTitle>Escolas</PageTitle>
+
+<h1 class="h3 mb-3">Escolas e licenças</h1>
+
+<div class="row g-3 mb-4">
+    <Cartao Titulo="Escolas" Valor="@linhas.Count" />
+    <Cartao Titulo="Com licença válida" Valor="@linhas.Count(l => l.Estado == EstadoLicenca.Valida)" Tom="sucesso" />
+    <Cartao Titulo="A expirar em 30 dias" Valor="@linhas.Count(l => l.Estado == EstadoLicenca.Valida && l.DiasRestantes <= 30)" Tom="aviso" />
+    <Cartao Titulo="Expiradas ou suspensas" Valor="@linhas.Count(l => l.Estado is EstadoLicenca.Expirada or EstadoLicenca.Suspensa)" Tom="perigo" />
+</div>
+
+@if (acesso is not null)
+{
+    <div class="alert alert-warning" role="alert">
+        <strong>@acesso.Titulo</strong> A palavra-passe temporária só é mostrada agora; terá de ser mudada no primeiro acesso.<br />
+        Utilizador: <code>@acesso.Utilizador</code> · Palavra-passe: <code>@acesso.Palavrapasse</code>
+    </div>
+}
+@if (mensagem is not null)
+{
+    <div class="alert @(erro ? "alert-danger" : "alert-success") py-2" role="status">@mensagem</div>
+}
+
+<div class="card mb-4">
+    <div class="card-header">Nova escola</div>
+    <form class="card-body row g-2 align-items-end" @onsubmit="CriarEscolaAsync" @onsubmit:preventDefault>
+        <div class="col-12 col-md-4">
+            <label class="form-label small mb-0" for="ne-nome">Nome da escola</label>
+            <input id="ne-nome" class="form-control" maxlength="120" @bind="novaNome" />
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small mb-0" for="ne-plano">Plano</label>
+            <select id="ne-plano" class="form-select" @bind="novoPlano">
+                @foreach (var p in Enum.GetValues<PlanoLicenca>())
+                {
+                    <option value="@p">@p</option>
+                }
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small mb-0" for="ne-limite">Limite de alunos</label>
+            <input id="ne-limite" type="number" min="0" class="form-control" @bind="novoLimite" />
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small mb-0" for="ne-validade">Válida até</label>
+            <input id="ne-validade" type="date" class="form-control" @bind="novaValidade" />
+        </div>
+        <div class="col-12"></div>
+        <div class="col-12 col-md-4">
+            <label class="form-label small mb-0" for="ne-dir">Nome da direção</label>
+            <input id="ne-dir" class="form-control" maxlength="120" @bind="novaDirecaoNome" />
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small mb-0" for="ne-user">Utilizador ou telefone da direção</label>
+            <input id="ne-user" class="form-control" maxlength="30" @bind="novaDirecaoUtilizador" />
+        </div>
+        <div class="col-auto"><button class="btn btn-primary" type="submit">Criar escola</button></div>
+    </form>
+</div>
+
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead>
+            <tr><th>Escola</th><th>Plano</th><th>Alunos</th><th>Contas</th><th>Licença</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var l in linhas)
+            {
+                <tr>
+                    <td class="fw-semibold">@l.Nome</td>
+                    <td>@l.Plano</td>
+                    <td>
+                        @l.Alunos@(l.Limite > 0 ? $" / {l.Limite}" : "")
+                        @if (l.Limite > 0 && l.Alunos > l.Limite) { <span class="badge text-bg-warning ms-1">acima do plano</span> }
+                    </td>
+                    <td>@l.Contas</td>
+                    <td>
+                        <EstadoBadge Estado="l.Estado" />
+                        <div class="small text-muted">até @l.ValidaAte.ToString("dd/MM/yyyy")</div>
+                    </td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-secondary" aria-expanded="@(aberta == l.Id)" @onclick="() => AbrirAsync(l.Id)">
+                            @(aberta == l.Id ? "Fechar" : "Gerir")
+                        </button>
+                    </td>
+                </tr>
+                @if (aberta == l.Id)
+                {
+                    <tr>
+                        <td colspan="6" class="bg-body-tertiary">
+                            <div class="row g-3">
+                                <div class="col-md-5">
+                                    <div class="fw-semibold mb-2">Licença</div>
+                                    <div class="d-flex flex-wrap gap-2 mb-2">
+                                        @foreach (var m in new[] { 1, 3, 12 })
+                                        {
+                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => RenovarAsync(l.Id, m)">Renovar +@m @(m == 1 ? "mês" : "meses")</button>
+                                        }
+                                    </div>
+                                    <div class="d-flex gap-2 align-items-end mb-2">
+                                        <div>
+                                            <label class="form-label small mb-0" for="ed-plano">Plano</label>
+                                            <select id="ed-plano" class="form-select form-select-sm" @bind="editPlano">
+                                                @foreach (var p in Enum.GetValues<PlanoLicenca>()) { <option value="@p">@p</option> }
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="form-label small mb-0" for="ed-limite">Limite de alunos</label>
+                                            <input id="ed-limite" type="number" min="0" class="form-control form-control-sm" style="width: 6rem" @bind="editLimite" />
+                                        </div>
+                                        <button class="btn btn-sm btn-primary" @onclick="() => GuardarPlanoAsync(l.Id)">Guardar</button>
+                                    </div>
+                                    @if (l.Estado == EstadoLicenca.Suspensa)
+                                    {
+                                        <button class="btn btn-sm btn-success" @onclick="() => SuspenderAsync(l.Id, false)">Reativar escola</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => SuspenderAsync(l.Id, true)">Suspender escola</button>
+                                    }
+                                </div>
+                                <div class="col-md-7">
+                                    <div class="fw-semibold mb-2">Direção</div>
+                                    @foreach (var d in direcoes)
+                                    {
+                                        <div class="d-flex gap-2 align-items-center mb-2">
+                                            <span class="flex-grow-1">@d.NomeCompleto (<code>@d.UserName</code>) @(d.MudarPalavrapasse ? "· palavra-passe temporária" : "")</span>
+                                            <button class="btn btn-sm btn-outline-primary" aria-label="Repor palavra-passe de @d.NomeCompleto" @onclick="() => ReporAsync(d)">Repor palavra-passe</button>
+                                        </div>
+                                    }
+                                    <div class="fw-semibold mt-3 mb-1">Histórico recente</div>
+                                    <ul class="small text-muted mb-0">
+                                        @foreach (var h in historico)
+                                        {
+                                            <li>@h.QuandoUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm") — @h.Acao@(h.ValorNovo is null ? "" : $": {h.ValorNovo}")</li>
+                                        }
+                                        @if (historico.Count == 0) { <li>Sem registos.</li> }
+                                    </ul>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    private sealed record Linha(int Id, string Nome, PlanoLicenca Plano, int Limite, int Alunos, int Contas, EstadoLicenca Estado, DateOnly ValidaAte)
+    {
+        public int DiasRestantes => ValidaAte.DayNumber - DateOnly.FromDateTime(DateTime.Today).DayNumber;
+    }
+
+    private sealed record Acesso(string Titulo, string Utilizador, string Palavrapasse);
+
+    private readonly DateOnly hoje = DateOnly.FromDateTime(DateTime.Today);
+    private List<Linha> linhas = [];
+    private List<ApplicationUser> direcoes = [];
+    private List<RegistoAlteracao> historico = [];
+    private Acesso? acesso;
+    private string? mensagem;
+    private bool erro;
+    private int aberta;
+
+    private string novaNome = "", novaDirecaoNome = "", novaDirecaoUtilizador = "";
+    private PlanoLicenca novoPlano = PlanoLicenca.Teste;
+    private int novoLimite;
+    private DateTime? novaValidade = DateTime.Today.AddDays(30);
+    private PlanoLicenca editPlano;
+    private int editLimite;
+
+    private Ator Ator => new(UserId, PerfilUtilizador.AdminSaas, null);
+
+    protected override async Task CarregarAsync() => await RecarregarAsync();
+
+    private async Task RecarregarAsync()
+    {
+        var escolas = await Db.Escolas.AsNoTracking().OrderBy(e => e.Nome).ToListAsync();
+
+        // Números de todas as escolas: aqui, e só aqui, o filtro por escola é ignorado de propósito.
+        var alunos = await Db.Matriculas.IgnoreQueryFilters().AsNoTracking()
+            .Where(m => Db.AnosLetivos.IgnoreQueryFilters().Any(a => a.Id == m.AnoLetivoId && a.Estado == EstadoAnoLetivo.Aberto))
+            .GroupBy(m => m.EscolaId).Select(g => new { Escola = g.Key, N = g.Select(x => x.AlunoId).Distinct().Count() })
+            .ToDictionaryAsync(x => x.Escola, x => x.N);
+        var contas = await Db.Users.AsNoTracking().Where(u => u.EscolaId != null)
+            .GroupBy(u => u.EscolaId!.Value).Select(g => new { Escola = g.Key, N = g.Count() })
+            .ToDictionaryAsync(x => x.Escola, x => x.N);
+
+        linhas = escolas.Select(e => new Linha(e.Id, e.Nome, e.Plano, e.LimiteAlunos,
+            alunos.GetValueOrDefault(e.Id), contas.GetValueOrDefault(e.Id), e.EstadoLicenca(hoje), e.LicencaValidaAte)).ToList();
+        if (aberta != 0) await CarregarDetalheAsync(aberta);
+    }
+
+    private async Task AbrirAsync(int id)
+    {
+        acesso = null;
+        if (aberta == id) { aberta = 0; return; }
+        aberta = id;
+        await CarregarDetalheAsync(id);
+    }
+
+    private async Task CarregarDetalheAsync(int id)
+    {
+        var e = await Db.Escolas.AsNoTracking().FirstAsync(x => x.Id == id);
+        editPlano = e.Plano; editLimite = e.LimiteAlunos;
+        direcoes = await Db.Users.AsNoTracking().Where(u => u.EscolaId == id && u.Perfil == PerfilUtilizador.Direcao).ToListAsync();
+        historico = await Db.Alteracoes.IgnoreQueryFilters().AsNoTracking()
+            .Where(r => r.EscolaId == id && (r.Entidade == nameof(Escola) || r.Acao.StartsWith("Conta") || r.Acao.StartsWith("Palavrapasse")))
+            .OrderByDescending(r => r.QuandoUtc).Take(8).ToListAsync();
+    }
+
+    private void Registar(int escolaId, string acao, string? antes, string? depois) =>
+        Db.Alteracoes.Add(new RegistoAlteracao
+        {
+            EscolaId = escolaId, UserId = UserId, Entidade = nameof(Escola), EntidadeId = escolaId.ToString(),
+            Acao = acao, ValorAnterior = antes, ValorNovo = depois
+        });
+
+    private async Task CriarEscolaAsync()
+    {
+        acesso = null; erro = true;
+        var nome = novaNome.Trim();
+        if (nome.Length < 3) { mensagem = "Indique o nome da escola."; return; }
+        if (string.IsNullOrWhiteSpace(novaDirecaoNome)) { mensagem = "Indique o nome da direção."; return; }
+        if (novaValidade is not { } validade || DateOnly.FromDateTime(validade) < hoje) { mensagem = "A validade deve ser hoje ou uma data futura."; return; }
+        if (novoLimite < 0) { mensagem = "O limite de alunos não pode ser negativo."; return; }
+        if (await Db.Escolas.AnyAsync(e => e.Nome == nome)) { mensagem = "Já existe uma escola com esse nome."; return; }
+
+        var escola = new Escola { Nome = nome, Plano = novoPlano, LimiteAlunos = novoLimite, LicencaValidaAte = DateOnly.FromDateTime(validade) };
+        Db.Escolas.Add(escola);
+        await Db.SaveChangesAsync();
+
+        var conta = await Contas.CriarAsync(Ator, novaDirecaoUtilizador, novaDirecaoNome, PerfilUtilizador.Direcao, escola.Id);
+        if (!conta.Sucesso)
+        {
+            // Sem direção a escola ficaria inacessível: desfaz a criação.
+            Db.Escolas.Remove(escola);
+            await Db.SaveChangesAsync();
+            mensagem = conta.Erro;
+            return;
+        }
+
+        Registar(escola.Id, "Criada", null, $"{nome} · {novoPlano} · até {escola.LicencaValidaAte:dd/MM/yyyy}");
+        await Db.SaveChangesAsync();
+        erro = false; mensagem = $"Escola \"{nome}\" criada.";
+        acesso = new($"Direção de {nome}.", conta.Utilizador!, conta.Palavrapasse!);
+        novaNome = novaDirecaoNome = novaDirecaoUtilizador = "";
+        await RecarregarAsync();
+    }
+
+    private async Task RenovarAsync(int id, int meses)
+    {
+        var e = await Db.Escolas.FirstAsync(x => x.Id == id);
+        var antes = e.LicencaValidaAte;
+        e.LicencaValidaAte = Escola.RenovarValidade(antes, hoje, meses);
+        Registar(id, "LicencaRenovada", antes.ToString("yyyy-MM-dd"), e.LicencaValidaAte.ToString("yyyy-MM-dd"));
+        await Db.SaveChangesAsync();
+        erro = false; acesso = null; mensagem = $"{e.Nome}: licença renovada até {e.LicencaValidaAte:dd/MM/yyyy}.";
+        await RecarregarAsync();
+    }
+
+    private async Task SuspenderAsync(int id, bool suspender)
+    {
+        var e = await Db.Escolas.FirstAsync(x => x.Id == id);
+        e.Ativa = !suspender;
+        Registar(id, suspender ? "Suspensa" : "Reativada", (!e.Ativa).ToString(), e.Ativa.ToString());
+        await Db.SaveChangesAsync();
+        erro = false; acesso = null; mensagem = $"{e.Nome} {(suspender ? "suspensa" : "reativada")}.";
+        await RecarregarAsync();
+    }
+
+    private async Task GuardarPlanoAsync(int id)
+    {
+        acesso = null; erro = true;
+        if (editLimite < 0) { mensagem = "O limite de alunos não pode ser negativo."; return; }
+        var e = await Db.Escolas.FirstAsync(x => x.Id == id);
+        Registar(id, "PlanoAlterado", $"{e.Plano}/{e.LimiteAlunos}", $"{editPlano}/{editLimite}");
+        e.Plano = editPlano; e.LimiteAlunos = editLimite;
+        await Db.SaveChangesAsync();
+        erro = false; mensagem = $"{e.Nome}: plano atualizado.";
+        await RecarregarAsync();
+    }
+
+    private async Task ReporAsync(ApplicationUser d)
+    {
+        acesso = null; erro = true;
+        var r = await Contas.ReporPalavrapasseAsync(Ator, d.Id);
+        if (!r.Sucesso) { mensagem = r.Erro; return; }
+        erro = false; mensagem = null;
+        acesso = new($"Palavra-passe de {d.NomeCompleto} reposta.", r.Utilizador!, r.Palavrapasse!);
+        await RecarregarAsync();
+    }
+}

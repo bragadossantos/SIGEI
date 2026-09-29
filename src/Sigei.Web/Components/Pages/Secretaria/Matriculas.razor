@@ -24,6 +24,13 @@
 {
     <div class="alert alert-warning">A licença da escola não está ativa: as alterações estão desativadas.</div>
 }
+@if (escola.LimiteAlunos > 0 && matriculas.Select(m => m.AlunoId).Distinct().Count() > escola.LimiteAlunos)
+{
+    <div class="alert alert-warning" role="status">
+        A escola tem mais alunos (@matriculas.Select(m => m.AlunoId).Distinct().Count()) do que o incluído no plano (@escola.LimiteAlunos).
+        As matrículas continuam permitidas; fale com o suporte do SIGEI para ajustar o plano.
+    </div>
+}
 @if (mensagem is not null)
 {
     <div class="alert @(erro ? "alert-danger" : "alert-success") py-2" role="status">@mensagem</div>
