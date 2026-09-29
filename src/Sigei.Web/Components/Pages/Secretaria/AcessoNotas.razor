@@ -1,0 +1,225 @@
+@page "/secretaria/acesso-notas"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = Politicas.DecidirAcessoNotas)]
+@inherits PaginaEscola
+@using Microsoft.EntityFrameworkCore
+@using Sigei.Domain
+@using Sigei.Web.Data
+@inject ApplicationDbContext Db
+
+<PageTitle>Acesso às notas</PageTitle>
+
+<h1 class="h3 mb-1">Acesso às notas</h1>
+<p class="text-muted">
+    Decida quem pode consultar as notas de cada aluno. <strong>Automático</strong> segue a mensalidade
+    (o encarregado só vê com a mensalidade em dia); <strong>Liberado</strong> permite sempre;
+    <strong>Bloqueado</strong> impede sempre. O aluno (a partir da 7.ª classe) não depende da mensalidade.
+</p>
+
+@if (escola is null)
+{
+    <div class="alert alert-warning">Não foi possível identificar a sua escola.</div>
+    return;
+}
+
+@if (!editavel)
+{
+    <div class="alert alert-warning">
+        A licença da escola @(escola.EstadoLicenca(hoje) == EstadoLicenca.SoLeitura ? "expirou e está em período de leitura" : "não está ativa").
+        As alterações estão desativadas.
+    </div>
+}
+
+@if (mensagem is not null)
+{
+    <div class="alert alert-success py-2" role="status">@mensagem</div>
+}
+
+<div class="d-flex flex-wrap gap-3 align-items-center mb-3">
+    <div>
+        <label class="form-label mb-0 small" for="turma">Turma</label>
+        <select id="turma" class="form-select form-select-sm" @bind="turmaFiltro" @bind:after="Recalcular">
+            <option value="0">Todas</option>
+            @foreach (var t in turmas)
+            {
+                <option value="@t.Id">@t.Nome</option>
+            }
+        </select>
+    </div>
+    <div class="form-check mt-3">
+        <input id="atraso" class="form-check-input" type="checkbox" @bind="soAtraso" @bind:after="Recalcular" />
+        <label class="form-check-label" for="atraso">Só mensalidade em atraso</label>
+    </div>
+    <div class="ms-auto small text-muted mt-3">@linhas.Count aluno(s) · ano letivo @ano?.Designacao</div>
+</div>
+
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th>Aluno</th>
+                <th>Turma</th>
+                <th>Mensalidade</th>
+                <th>Decisão da secretaria</th>
+                <th>Encarregado vê?</th>
+                <th>Aluno vê?</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var l in linhas)
+            {
+                <tr>
+                    <td>
+                        <div class="fw-semibold">@l.Nome</div>
+                        <div class="small text-muted">@l.Encarregado</div>
+                    </td>
+                    <td>@l.Turma</td>
+                    <td>
+                        @if (l.EmDia)
+                        {
+                            <span class="badge text-bg-success">Em dia</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-danger">Em atraso</span>
+                            <div class="small text-muted">@l.ValorEmAtraso.ToString("N0") Kz</div>
+                            @if (editavel)
+                            {
+                                <button class="btn btn-link btn-sm p-0" @onclick="() => RegistarPagamento(l.MatriculaId)">Registar pagamento</button>
+                            }
+                        }
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Decisão para @l.Nome">
+                            @foreach (var modo in Modos)
+                            {
+                                <button type="button"
+                                        class="btn @(l.Modo == modo ? EstiloAtivo(modo) : "btn-outline-secondary")"
+                                        aria-pressed="@(l.Modo == modo)"
+                                        disabled="@(!editavel)"
+                                        @onclick="() => Definir(l.MatriculaId, modo)">@Rotulo(modo)</button>
+                            }
+                        </div>
+                    </td>
+                    <td><Decisao D="l.Encarregado_Decisao" /></td>
+                    <td><Decisao D="l.Aluno_Decisao" /></td>
+                </tr>
+            }
+            @if (linhas.Count == 0)
+            {
+                <tr><td colspan="6" class="text-center text-muted py-4">Nenhum aluno para mostrar.</td></tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    private static readonly ModoAcessoNotas[] Modos = [ModoAcessoNotas.Automatico, ModoAcessoNotas.Liberado, ModoAcessoNotas.Bloqueado];
+
+    private sealed record Linha(
+        int MatriculaId, string Nome, string Encarregado, string Turma, int TurmaId, bool EmDia, decimal ValorEmAtraso,
+        ModoAcessoNotas Modo, DecisaoAcesso Encarregado_Decisao, DecisaoAcesso Aluno_Decisao);
+
+    private readonly DateOnly hoje = DateOnly.FromDateTime(DateTime.Today);
+    private Escola? escola;
+    private AnoLetivo? ano;
+    private List<Turma> turmas = [];
+    private List<Matricula> matriculas = [];
+    private List<Linha> linhas = [];
+    private int turmaFiltro;
+    private bool soAtraso;
+    private bool editavel;
+    private string? mensagem;
+
+    protected override async Task CarregarAsync()
+    {
+        if (EscolaId is not { } id) return;
+        escola = await Db.Escolas.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id);
+        if (escola is null) return;
+        editavel = escola.EstadoLicenca(hoje) == EstadoLicenca.Valida;
+
+        ano = await Db.AnosLetivos.AsNoTracking()
+            .Where(a => a.Estado == EstadoAnoLetivo.Aberto).OrderByDescending(a => a.Inicio).FirstOrDefaultAsync();
+        if (ano is null) return;
+
+        turmas = await Db.Turmas.AsNoTracking().Where(t => t.AnoLetivoId == ano.Id).OrderBy(t => t.ClasseNumero).ThenBy(t => t.Nome).ToListAsync();
+        matriculas = await Db.Matriculas
+            .Include(m => m.Aluno!).ThenInclude(a => a.Encarregados)
+            .Include(m => m.Turma)
+            .Include(m => m.Mensalidades)
+            .Where(m => m.AnoLetivoId == ano.Id)
+            .AsSplitQuery()
+            .ToListAsync();
+        Recalcular();
+    }
+
+    private void Recalcular()
+    {
+        if (escola is null) return;
+        linhas = matriculas
+            .OrderBy(m => m.ClasseNumero).ThenBy(m => m.Aluno!.Nome)
+            .Where(m => turmaFiltro == 0 || m.TurmaId == turmaFiltro)
+            .Select(m =>
+            {
+                var emDia = Mensalidade.EmDia(m.Mensalidades, hoje, escola.DiasToleranciaMensalidade);
+                var valor = m.Mensalidades.Where(x => x.PagaEm is null && x.Vencimento.AddDays(escola.DiasToleranciaMensalidade) < hoje).Sum(x => x.ValorKz);
+                return new Linha(m.Id, m.Aluno!.Nome, string.Join(", ", m.Aluno.Encarregados.Select(e => e.Nome)),
+                    m.Turma!.Nome, m.TurmaId, emDia, valor, m.ModoAcessoNotas,
+                    m.PodeVerNotas(PerfilAcesso.Encarregado, escola, hoje),
+                    m.PodeVerNotas(PerfilAcesso.Aluno, escola, hoje));
+            })
+            .Where(l => !soAtraso || !l.EmDia)
+            .ToList();
+    }
+
+    private async Task Definir(int matriculaId, ModoAcessoNotas novo)
+    {
+        if (!editavel) return;
+        var m = matriculas.First(x => x.Id == matriculaId);
+        if (m.ModoAcessoNotas == novo) return;
+
+        var anterior = m.ModoAcessoNotas;
+        m.ModoAcessoNotas = novo;
+        Db.Alteracoes.Add(new RegistoAlteracao
+        {
+            UserId = UserId, Entidade = nameof(Matricula), EntidadeId = m.Id.ToString(),
+            Acao = "ModoAcessoNotas", ValorAnterior = anterior.ToString(), ValorNovo = novo.ToString()
+        });
+        await Db.SaveChangesAsync();
+        mensagem = $"{m.Aluno!.Nome}: acesso às notas definido como {Rotulo(novo)}.";
+        Recalcular();
+    }
+
+    private async Task RegistarPagamento(int matriculaId)
+    {
+        if (!editavel || escola is null) return;
+        var m = matriculas.First(x => x.Id == matriculaId);
+        var pendentes = m.Mensalidades.Where(x => x.PagaEm is null && x.Vencimento.AddDays(escola.DiasToleranciaMensalidade) < hoje).ToList();
+        foreach (var p in pendentes)
+        {
+            p.PagaEm = hoje;
+            Db.Alteracoes.Add(new RegistoAlteracao
+            {
+                UserId = UserId, Entidade = nameof(Mensalidade), EntidadeId = p.Id.ToString(),
+                Acao = "PagamentoRegistado", ValorAnterior = null, ValorNovo = $"{p.Referencia} {p.ValorKz:N0} Kz"
+            });
+        }
+        await Db.SaveChangesAsync();
+        mensagem = $"{m.Aluno!.Nome}: pagamento registado ({pendentes.Count} mensalidade(s)).";
+        Recalcular();
+    }
+
+    private static string Rotulo(ModoAcessoNotas m) => m switch
+    {
+        ModoAcessoNotas.Automatico => "Automático",
+        ModoAcessoNotas.Liberado => "Liberado",
+        _ => "Bloqueado"
+    };
+
+    private static string EstiloAtivo(ModoAcessoNotas m) => m switch
+    {
+        ModoAcessoNotas.Liberado => "btn-success",
+        ModoAcessoNotas.Bloqueado => "btn-danger",
+        _ => "btn-primary"
+    };
+}

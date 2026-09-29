@@ -17,10 +17,18 @@ public interface ITenantAccessor
     int? EscolaId { get; }
 }
 
-public sealed class HttpTenantAccessor(IHttpContextAccessor http) : ITenantAccessor
+/// <summary>
+/// Nos pedidos normais lê a escola do cookie de sessão. Nas páginas interativas (Blazor Server) não há
+/// HttpContext, por isso a página define a escola a partir do estado de autenticação.
+/// </summary>
+public sealed class ScopedTenantAccessor(IHttpContextAccessor http) : ITenantAccessor
 {
+    private int? _definida;
+
     public int? EscolaId =>
-        int.TryParse(http.HttpContext?.User.FindFirstValue(SigeiClaims.EscolaId), out var id) ? id : null;
+        _definida ?? (int.TryParse(http.HttpContext?.User.FindFirstValue(SigeiClaims.EscolaId), out var id) ? id : null);
+
+    public void Definir(int? escolaId) => _definida = escolaId;
 }
 
 /// <summary>Acrescenta escola e perfil ao cookie de sessão.</summary>

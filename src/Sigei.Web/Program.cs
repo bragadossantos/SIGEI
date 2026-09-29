@@ -25,7 +25,11 @@ builder.Services.AddAuthentication(options =>
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<ITenantAccessor, HttpTenantAccessor>();
+builder.Services.AddScoped<ScopedTenantAccessor>();
+builder.Services.AddScoped<ITenantAccessor>(sp => sp.GetRequiredService<ScopedTenantAccessor>());
+builder.Services.AddAuthorization();
+builder.Services.Configure<Microsoft.AspNetCore.Authorization.AuthorizationOptions>(Politicas.Registar);
+builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, PermissaoHandler>();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(connectionString));
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
@@ -44,6 +48,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseMigrationsEndPoint();
+    await DadosDemonstracao.CriarAsync(app.Services);
 }
 else
 {

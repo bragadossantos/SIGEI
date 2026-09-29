@@ -9,6 +9,10 @@ SaaS multi-escola para o ensino angolano (Iniciação à 13.ª classe), em C# / 
 - A secretaria decide por matrícula: Automático (encarregado só vê com a mensalidade em dia), Liberado ou Bloqueado.
   Cada escola pode desligar a regra da mensalidade.
 
+## Demonstração local
+Em desenvolvimento cria-se automaticamente uma escola fictícia com 5 contas (direção, secretaria, professor, aluno da 8.ª, encarregado da 5.ª),
+palavra-passe `Sigei@Demo2026`. Ecrã da secretaria: `/secretaria/acesso-notas`.
+
 ## Correr
 ```
 dotnet test

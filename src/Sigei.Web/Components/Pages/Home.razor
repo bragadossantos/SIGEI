@@ -1,7 +1,33 @@
-﻿@page "/"
+@page "/"
+@inject IWebHostEnvironment Env
 
-<PageTitle>Home</PageTitle>
+<PageTitle>SIGEI</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>SIGEI</h1>
+<p class="lead">Sistema Integrado de Gestão Escolar — Iniciação à 13.ª classe.</p>
 
-Welcome to your new app.
+<AuthorizeView>
+    <Authorized>
+        <p>Sessão iniciada como <strong>@context.User.Identity?.Name</strong>.</p>
+        <AuthorizeView Policy="@Sigei.Web.Data.Politicas.DecidirAcessoNotas" Context="_">
+            <a class="btn btn-primary" href="secretaria/acesso-notas">Acesso às notas</a>
+        </AuthorizeView>
+    </Authorized>
+    <NotAuthorized>
+        <a class="btn btn-primary" href="Account/Login">Entrar</a>
+    </NotAuthorized>
+</AuthorizeView>
+
+@if (Env.IsDevelopment())
+{
+    <div class="card mt-4" style="max-width: 36rem">
+        <div class="card-header">Contas de demonstração (apenas em desenvolvimento)</div>
+        <ul class="list-group list-group-flush">
+            @foreach (var c in Sigei.Web.Data.DadosDemonstracao.Contas)
+            {
+                <li class="list-group-item"><strong>@c.Perfil</strong> — @c.Email</li>
+            }
+            <li class="list-group-item text-muted">Palavra-passe: @Sigei.Web.Data.DadosDemonstracao.Palavrapasse</li>
+        </ul>
+    </div>
+}

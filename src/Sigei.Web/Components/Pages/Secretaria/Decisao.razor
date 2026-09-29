@@ -1,0 +1,25 @@
+@using Sigei.Domain
+
+@if (D.Permitido)
+{
+    <span class="badge text-bg-success">Sim</span>
+}
+else
+{
+    <span class="badge text-bg-secondary">Não</span>
+}
+<div class="small text-muted">@Motivo</div>
+
+@code {
+    [Parameter, EditorRequired] public DecisaoAcesso D { get; set; }
+
+    private string Motivo => D.Motivo switch
+    {
+        MotivoAcesso.Permitido => "",
+        MotivoAcesso.ConsultaLiberadaPelaSecretaria => "liberado pela secretaria",
+        MotivoAcesso.BloqueadoPelaSecretaria => "bloqueado pela secretaria",
+        MotivoAcesso.MensalidadeEmAtraso => "mensalidade em atraso",
+        MotivoAcesso.AlunoSemAcessoProprio => "só a partir da 7.ª classe",
+        _ => ""
+    };
+}
