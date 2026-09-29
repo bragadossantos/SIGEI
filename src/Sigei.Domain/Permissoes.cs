@@ -21,14 +21,15 @@ public enum Permissao
     LancarNotas,
     AbrirFecharAnoLetivo,
     GerirDefinicoesEscola,
+    PublicarAnuncios,
     AdministrarPlataforma,
     ConsultarNotas
 }
 
-/// <summary>Matriz de permissões por perfil. A secretaria só gere o currículo se a escola o permitir.</summary>
+/// <summary>Matriz de permissões por perfil. A secretaria só gere o currículo ou publica anúncios se a direção o permitir.</summary>
 public static class MatrizPermissoes
 {
-    public static bool Tem(PerfilUtilizador perfil, Permissao permissao, bool secretariaGereDisciplinas = false) =>
+    public static bool Tem(PerfilUtilizador perfil, Permissao permissao, bool secretariaGereDisciplinas = false, bool secretariaPublicaAnuncios = false) =>
         perfil switch
         {
             PerfilUtilizador.AdminSaas => permissao == Permissao.AdministrarPlataforma, // escolas e licenças, nunca os dados pedagógicos
@@ -41,6 +42,7 @@ public static class MatrizPermissoes
                     or Permissao.DecidirAcessoNotas
                     or Permissao.GerirMensalidades => true,
                 Permissao.GerirCurriculoDisciplinas => secretariaGereDisciplinas,
+                Permissao.PublicarAnuncios => secretariaPublicaAnuncios,
                 _ => false
             },
             PerfilUtilizador.Professor => permissao == Permissao.LancarNotas,

@@ -1,0 +1,28 @@
+@using Sigei.Domain
+
+<article class="card anuncio mb-3 @(A.Fixado ? "anuncio-fixado" : "")">
+    <div class="card-body">
+        <h2 class="h5 card-title mb-1">
+            @if (A.Fixado) { <span class="badge text-bg-warning me-1">Fixado</span> }
+            @A.Titulo
+        </h2>
+        <div class="small text-muted mb-2">
+            @A.PublicadoEmUtc.ToLocalTime().ToString("dd/MM/yyyy") · @A.AutorNome
+            @if (A.Destinatarios != DestinatariosAnuncio.Todos) { <span> · @Rotulo(A.Destinatarios)</span> }
+            @if (A.ExpiraEm is { } fim) { <span> · até @fim.ToString("dd/MM/yyyy")</span> }
+        </div>
+        @* O texto é sempre codificado pelo Razor; as quebras de linha vêm do CSS. *@
+        <p class="card-text anuncio-texto mb-0">@A.Texto</p>
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public Anuncio A { get; set; } = default!;
+
+    public static string Rotulo(DestinatariosAnuncio d) => d switch
+    {
+        DestinatariosAnuncio.Pessoal => "só pessoal da escola",
+        DestinatariosAnuncio.AlunosEEncarregados => "alunos e encarregados",
+        _ => "todos"
+    };
+}

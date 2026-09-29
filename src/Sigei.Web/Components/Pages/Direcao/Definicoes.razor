@@ -42,6 +42,11 @@
         <div class="form-text">Recomendado desligado: um erro no currículo afeta as pautas de todos os alunos.</div>
     </div>
 
+    <div class="form-check form-switch mb-3">
+        <InputCheckbox id="sec-anuncios" class="form-check-input" role="switch" @bind-Value="escola.SecretariaPublicaAnuncios" />
+        <label class="form-check-label" for="sec-anuncios">A secretaria também pode publicar anúncios</label>
+    </div>
+
     <div class="row g-3 mb-3" style="max-width: 32rem">
         <div class="col-6">
             <label class="form-label" for="tol">Dias de tolerância</label>
@@ -72,7 +77,7 @@
     }
 
     private string Resumo() => escola is null ? "" :
-        $"bloqueio={escola.BloqueioPorMensalidadeAtivo};secretariaCurriculo={escola.SecretariaGereDisciplinas};tolerancia={escola.DiasToleranciaMensalidade};mensalidades={escola.NumeroMensalidades}";
+        $"bloqueio={escola.BloqueioPorMensalidadeAtivo};secretariaCurriculo={escola.SecretariaGereDisciplinas};secretariaAnuncios={escola.SecretariaPublicaAnuncios};tolerancia={escola.DiasToleranciaMensalidade};mensalidades={escola.NumeroMensalidades}";
 
     private async Task GuardarAsync()
     {

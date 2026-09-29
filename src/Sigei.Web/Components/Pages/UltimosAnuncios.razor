@@ -1,0 +1,34 @@
+@inherits PaginaEscola
+@using Microsoft.EntityFrameworkCore
+@using Sigei.Domain
+@using Sigei.Web.Data
+@inject ApplicationDbContext Db
+
+@if (anuncios.Count > 0)
+{
+    <section class="mt-4" aria-labelledby="ult-anuncios">
+        <div class="d-flex justify-content-between align-items-baseline">
+            <h2 id="ult-anuncios" class="h5">Últimos anúncios</h2>
+            <a href="anuncios">Ver todos</a>
+        </div>
+        @foreach (var a in anuncios)
+        {
+            <AnuncioCartao A="a" />
+        }
+    </section>
+}
+
+@code {
+    private List<Anuncio> anuncios = [];
+
+    protected override async Task CarregarAsync()
+    {
+        if (Perfil is not { } perfil || perfil == PerfilUtilizador.AdminSaas || EscolaId is null) return;
+        var hoje = DateOnly.FromDateTime(DateTime.Today);
+        var recentes = await Db.Anuncios.AsNoTracking()
+            .Where(a => !a.Arquivado && (a.ExpiraEm == null || a.ExpiraEm >= hoje))
+            .OrderByDescending(a => a.Fixado).ThenByDescending(a => a.PublicadoEmUtc)
+            .Take(30).ToListAsync();
+        anuncios = recentes.Where(a => a.VisivelPara(perfil)).Take(3).ToList();
+    }
+}

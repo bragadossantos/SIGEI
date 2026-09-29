@@ -1,0 +1,38 @@
+@page "/anuncios"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = Politicas.MembroDaEscola)]
+@inherits PaginaEscola
+@using Microsoft.EntityFrameworkCore
+@using Sigei.Domain
+@using Sigei.Web.Data
+@inject ApplicationDbContext Db
+
+<PageTitle>Anúncios</PageTitle>
+
+<h1 class="h3 mb-3">Anúncios da escola</h1>
+
+@if (anuncios.Count == 0)
+{
+    <div class="alert alert-info">Não há anúncios de momento.</div>
+}
+
+@foreach (var a in anuncios)
+{
+    <AnuncioCartao A="a" />
+}
+
+@code {
+    private List<Anuncio> anuncios = [];
+
+    protected override async Task CarregarAsync()
+    {
+        if (Perfil is not { } perfil) return;
+        var hoje = DateOnly.FromDateTime(DateTime.Today);
+        var todos = await Db.Anuncios.AsNoTracking()
+            .Where(a => !a.Arquivado && (a.ExpiraEm == null || a.ExpiraEm >= hoje))
+            .OrderByDescending(a => a.Fixado).ThenByDescending(a => a.PublicadoEmUtc)
+            .Take(200).ToListAsync();
+        // A visibilidade por destinatário confere-se aqui, no servidor, não só no ecrã.
+        anuncios = todos.Where(a => a.VisivelPara(perfil)).ToList();
+    }
+}

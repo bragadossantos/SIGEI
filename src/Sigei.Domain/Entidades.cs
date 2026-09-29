@@ -22,6 +22,7 @@ public class Escola
     public int LimiteAlunos { get; set; }
     public bool BloqueioPorMensalidadeAtivo { get; set; } = true;
     public bool SecretariaGereDisciplinas { get; set; }
+    public bool SecretariaPublicaAnuncios { get; set; }
     public int DiasToleranciaMensalidade { get; set; } = 5;
     public int NumeroMensalidades { get; set; } = 10; // Setembro a Junho
 
@@ -181,4 +182,51 @@ public class DocumentoMatricula : IPertenceEscola
     public TipoDocumento Tipo { get; set; }
     public DateOnly? EntregueEm { get; set; }
     public string? Observacao { get; set; }
+}
+
+public enum DestinatariosAnuncio
+{
+    Todos,
+    Pessoal,            // direção, secretaria e professores
+    AlunosEEncarregados
+}
+
+public class Anuncio : IPertenceEscola
+{
+    public const int TituloMaximo = 120;
+    public const int TextoMaximo = 4000;
+
+    public int Id { get; set; }
+    public int EscolaId { get; set; }
+    public required string Titulo { get; set; }
+    public required string Texto { get; set; }
+    public DestinatariosAnuncio Destinatarios { get; set; }
+    public bool Fixado { get; set; }
+    public bool Arquivado { get; set; }
+    public DateOnly? ExpiraEm { get; set; }
+    public DateTime PublicadoEmUtc { get; set; } = DateTime.UtcNow;
+    public required string AutorUserId { get; set; }
+    public required string AutorNome { get; set; }
+
+    /// <summary>Um anúncio arquivado ou expirado deixa de aparecer, mas nunca se apaga.</summary>
+    public bool Ativo(DateOnly hoje) => !Arquivado && (ExpiraEm is null || ExpiraEm >= hoje);
+
+    public bool VisivelPara(PerfilUtilizador perfil) => Destinatarios switch
+    {
+        DestinatariosAnuncio.Todos => perfil != PerfilUtilizador.AdminSaas,
+        DestinatariosAnuncio.Pessoal => perfil is PerfilUtilizador.Direcao or PerfilUtilizador.Secretaria or PerfilUtilizador.Professor,
+        DestinatariosAnuncio.AlunosEEncarregados => perfil is PerfilUtilizador.Aluno or PerfilUtilizador.Encarregado,
+        _ => false
+    };
+
+    /// <summary>Devolve o erro em português, ou null se o anúncio for válido.</summary>
+    public static string? Validar(string? titulo, string? texto, DateOnly? expiraEm, DateOnly hoje)
+    {
+        if (string.IsNullOrWhiteSpace(titulo)) return "Indique o título do anúncio.";
+        if (titulo.Trim().Length > TituloMaximo) return $"O título pode ter no máximo {TituloMaximo} caracteres.";
+        if (string.IsNullOrWhiteSpace(texto)) return "Escreva o texto do anúncio.";
+        if (texto.Trim().Length > TextoMaximo) return $"O texto pode ter no máximo {TextoMaximo} caracteres.";
+        if (expiraEm is { } e && e < hoje) return "A data de fim não pode ser anterior a hoje.";
+        return null;
+    }
 }

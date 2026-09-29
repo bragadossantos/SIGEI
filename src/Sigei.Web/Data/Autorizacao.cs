@@ -16,6 +16,7 @@ public static class Politicas
     public const string AbrirFecharAnoLetivo = "Permissao:AbrirFecharAnoLetivo";
     public const string GerirDefinicoesEscola = "Permissao:GerirDefinicoesEscola";
     public const string AdministrarPlataforma = "Permissao:AdministrarPlataforma";
+    public const string PublicarAnuncios = "Permissao:PublicarAnuncios";
     public const string DecidirAcessoNotas = "Permissao:DecidirAcessoNotas";
     public const string GerirMensalidades = "Permissao:GerirMensalidades";
     public const string LancarNotas = "Permissao:LancarNotas";
@@ -61,7 +62,7 @@ public sealed class PermissaoHandler(ApplicationDbContext db) : AuthorizationHan
 
         var escola = await db.Escolas.AsNoTracking()
             .Where(e => e.Id == escolaId)
-            .Select(e => new { e.Ativa, e.LicencaValidaAte, e.SecretariaGereDisciplinas })
+            .Select(e => new { e.Ativa, e.LicencaValidaAte, e.SecretariaGereDisciplinas, e.SecretariaPublicaAnuncios })
             .FirstOrDefaultAsync();
         if (escola is null) return;
 
@@ -78,7 +79,7 @@ public sealed class PermissaoHandler(ApplicationDbContext db) : AuthorizationHan
         var secretariaGereDisciplinas = permissao == Permissao.GerirCurriculoDisciplinas
             && perfil == PerfilUtilizador.Secretaria && escola.SecretariaGereDisciplinas;
 
-        if (MatrizPermissoes.Tem(perfil, permissao, secretariaGereDisciplinas))
+        if (MatrizPermissoes.Tem(perfil, permissao, secretariaGereDisciplinas, escola.SecretariaPublicaAnuncios))
             context.Succeed(requirement);
     }
 }

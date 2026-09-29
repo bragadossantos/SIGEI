@@ -18,6 +18,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Matricula> Matriculas => Set<Matricula>();
     public DbSet<Mensalidade> Mensalidades => Set<Mensalidade>();
     public DbSet<Nota> Notas => Set<Nota>();
+    public DbSet<Anuncio> Anuncios => Set<Anuncio>();
     public DbSet<DocumentoMatricula> DocumentosMatricula => Set<DocumentoMatricula>();
     public DbSet<RegistoAlteracao> Alteracoes => Set<RegistoAlteracao>();
 
@@ -44,6 +45,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<Turma>().Property(t => t.MensalidadeKz).HasPrecision(14, 2);
         b.Entity<DocumentoMatricula>().Property(d => d.Tipo).HasConversion<string>().HasMaxLength(24);
         b.Entity<DocumentoMatricula>().HasIndex(d => new { d.MatriculaId, d.Tipo }).IsUnique();
+        b.Entity<Anuncio>().Property(a => a.Titulo).HasMaxLength(Anuncio.TituloMaximo);
+        b.Entity<Anuncio>().Property(a => a.Texto).HasMaxLength(Anuncio.TextoMaximo);
+        b.Entity<Anuncio>().Property(a => a.Destinatarios).HasConversion<string>().HasMaxLength(20);
+        b.Entity<Anuncio>().HasIndex(a => new { a.EscolaId, a.Arquivado, a.PublicadoEmUtc });
         b.Entity<Nota>().HasIndex(n => new { n.MatriculaId, n.TurmaDisciplinaId, n.Trimestre }).IsUnique();
         b.Entity<Nota>().Ignore(n => n.Valores);
         b.Entity<Nota>().Property(n => n.Trimestre).HasConversion<int>();

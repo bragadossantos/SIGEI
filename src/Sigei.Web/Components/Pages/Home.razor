@@ -12,6 +12,9 @@
         <AuthorizeView Policy="@Sigei.Web.Data.Politicas.DecidirAcessoNotas" Context="_">
             <a class="btn btn-primary" href="secretaria/acesso-notas">Acesso às notas</a>
         </AuthorizeView>
+        <AuthorizeView Policy="@Sigei.Web.Data.Politicas.MembroDaEscola" Context="membro">
+            <UltimosAnuncios />
+        </AuthorizeView>
         <AuthorizeView Policy="@Sigei.Web.Data.Politicas.ConsultarNotas" Context="_">
             <a class="btn btn-primary" href="portal/notas">Ver notas</a>
         </AuthorizeView>

@@ -129,3 +129,64 @@ public class GestaoEscolarTests
             Assert.Equal(p == PerfilUtilizador.Direcao, MatrizPermissoes.Tem(p, Permissao.GerirDefinicoesEscola, true));
     }
 }
+
+public class AnunciosTests
+{
+    private static readonly DateOnly Hoje = new(2026, 10, 1);
+
+    private static Anuncio A(DestinatariosAnuncio d = DestinatariosAnuncio.Todos, bool arquivado = false, DateOnly? expira = null) =>
+        new() { Titulo = "t", Texto = "x", AutorUserId = "u", AutorNome = "n", Destinatarios = d, Arquivado = arquivado, ExpiraEm = expira };
+
+    [Fact]
+    public void Anuncio_para_todos_e_visto_por_toda_a_escola_menos_pelo_admin_da_plataforma()
+    {
+        foreach (var p in Enum.GetValues<PerfilUtilizador>())
+            Assert.Equal(p != PerfilUtilizador.AdminSaas, A().VisivelPara(p));
+    }
+
+    [Fact]
+    public void Anuncio_do_pessoal_nao_chega_a_familias_e_o_das_familias_nao_chega_a_professores()
+    {
+        Assert.True(A(DestinatariosAnuncio.Pessoal).VisivelPara(PerfilUtilizador.Professor));
+        Assert.False(A(DestinatariosAnuncio.Pessoal).VisivelPara(PerfilUtilizador.Encarregado));
+        Assert.False(A(DestinatariosAnuncio.Pessoal).VisivelPara(PerfilUtilizador.Aluno));
+        Assert.True(A(DestinatariosAnuncio.AlunosEEncarregados).VisivelPara(PerfilUtilizador.Aluno));
+        Assert.True(A(DestinatariosAnuncio.AlunosEEncarregados).VisivelPara(PerfilUtilizador.Encarregado));
+        Assert.False(A(DestinatariosAnuncio.AlunosEEncarregados).VisivelPara(PerfilUtilizador.Professor));
+    }
+
+    [Fact]
+    public void Arquivado_ou_expirado_deixa_de_estar_ativo()
+    {
+        Assert.True(A().Ativo(Hoje));
+        Assert.True(A(expira: Hoje).Ativo(Hoje));            // ainda vale no último dia
+        Assert.False(A(expira: Hoje.AddDays(-1)).Ativo(Hoje));
+        Assert.False(A(arquivado: true).Ativo(Hoje));
+    }
+
+    [Theory]
+    [InlineData("", "texto", false)]
+    [InlineData("   ", "texto", false)]
+    [InlineData("Título", "", false)]
+    [InlineData("Título", "texto", true)]
+    public void Validacao_basica(string titulo, string texto, bool valido) =>
+        Assert.Equal(valido, Anuncio.Validar(titulo, texto, null, Hoje) is null);
+
+    [Fact]
+    public void Validacao_de_limites_e_datas()
+    {
+        Assert.NotNull(Anuncio.Validar(new string('a', 121), "x", null, Hoje));
+        Assert.NotNull(Anuncio.Validar("t", new string('a', 4001), null, Hoje));
+        Assert.NotNull(Anuncio.Validar("t", "x", Hoje.AddDays(-1), Hoje));
+        Assert.Null(Anuncio.Validar("t", "x", Hoje, Hoje));
+    }
+
+    [Fact]
+    public void Publicar_e_so_da_direcao_e_da_secretaria_se_a_escola_permitir()
+    {
+        foreach (var p in Enum.GetValues<PerfilUtilizador>())
+            Assert.Equal(p == PerfilUtilizador.Direcao, MatrizPermissoes.Tem(p, Permissao.PublicarAnuncios));
+        Assert.True(MatrizPermissoes.Tem(PerfilUtilizador.Secretaria, Permissao.PublicarAnuncios, secretariaPublicaAnuncios: true));
+        Assert.False(MatrizPermissoes.Tem(PerfilUtilizador.Professor, Permissao.PublicarAnuncios, true, true));
+    }
+}

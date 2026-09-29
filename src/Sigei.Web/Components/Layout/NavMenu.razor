@@ -26,6 +26,22 @@
             </div>
         </AuthorizeView>
 
+        <AuthorizeView Policy="@Sigei.Web.Data.Politicas.MembroDaEscola" Context="an1">
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="anuncios">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Anúncios
+                </NavLink>
+            </div>
+        </AuthorizeView>
+
+        <AuthorizeView Policy="@Sigei.Web.Data.Politicas.PublicarAnuncios" Context="an2">
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="direcao/anuncios">
+                    <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Publicar anúncios
+                </NavLink>
+            </div>
+        </AuthorizeView>
+
         <AuthorizeView Policy="@Sigei.Web.Data.Politicas.AdministrarPlataforma" Context="adm">
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="admin/escolas">

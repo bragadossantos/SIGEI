@@ -1,0 +1,144 @@
+@page "/direcao/anuncios"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = Politicas.PublicarAnuncios)]
+@inherits PaginaEscola
+@using Microsoft.EntityFrameworkCore
+@using Sigei.Domain
+@using Sigei.Web.Data
+@inject ApplicationDbContext Db
+
+<PageTitle>Publicar anúncios</PageTitle>
+
+<h1 class="h3 mb-3">Publicar anúncios</h1>
+
+@if (mensagem is not null)
+{
+    <div class="alert @(erro ? "alert-danger" : "alert-success") py-2" role="status">@mensagem</div>
+}
+
+@if (!editavel)
+{
+    <div class="alert alert-warning">A licença da escola não está ativa: não é possível publicar.</div>
+}
+else
+{
+    <div class="card mb-4">
+        <div class="card-header">Novo anúncio</div>
+        <form class="card-body row g-2" @onsubmit="PublicarAsync" @onsubmit:preventDefault>
+            <div class="col-12">
+                <label class="form-label small mb-0" for="an-titulo">Título</label>
+                <input id="an-titulo" class="form-control" maxlength="@Anuncio.TituloMaximo" @bind="titulo" />
+            </div>
+            <div class="col-12">
+                <label class="form-label small mb-0" for="an-texto">Texto</label>
+                <textarea id="an-texto" class="form-control" rows="5" maxlength="@Anuncio.TextoMaximo" @bind="texto" @bind:event="oninput"></textarea>
+                <div class="form-text">@texto.Length / @Anuncio.TextoMaximo</div>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label small mb-0" for="an-dest">Quem vê</label>
+                <select id="an-dest" class="form-select" @bind="destinatarios">
+                    <option value="@DestinatariosAnuncio.Todos">Todos</option>
+                    <option value="@DestinatariosAnuncio.Pessoal">Só pessoal da escola</option>
+                    <option value="@DestinatariosAnuncio.AlunosEEncarregados">Alunos e encarregados</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small mb-0" for="an-fim">Mostrar até (opcional)</label>
+                <input id="an-fim" type="date" class="form-control" @bind="expiraEm" />
+            </div>
+            <div class="col-6 col-md-3 d-flex align-items-end">
+                <div class="form-check">
+                    <input id="an-fixo" class="form-check-input" type="checkbox" @bind="fixado" />
+                    <label class="form-check-label" for="an-fixo">Fixar no topo</label>
+                </div>
+            </div>
+            <div class="col-12"><button class="btn btn-primary" type="submit">Publicar</button></div>
+        </form>
+    </div>
+}
+
+<h2 class="h5">Anúncios publicados</h2>
+@foreach (var a in anuncios)
+{
+    <div class="mb-3 @(a.Ativo(hoje) ? "" : "opacity-50")">
+        <AnuncioCartao A="a" />
+        <div class="d-flex gap-2 mt-n2 mb-3">
+            @if (a.Arquivado) { <span class="badge text-bg-secondary align-self-center">Arquivado</span> }
+            else if (!a.Ativo(hoje)) { <span class="badge text-bg-secondary align-self-center">Expirado</span> }
+            @if (editavel)
+            {
+                <button class="btn btn-sm btn-outline-secondary" aria-label="@(a.Arquivado ? "Desarquivar" : "Arquivar") @a.Titulo" @onclick="() => AlternarArquivoAsync(a)">@(a.Arquivado ? "Desarquivar" : "Arquivar")</button>
+                <button class="btn btn-sm btn-outline-secondary" aria-label="@(a.Fixado ? "Desafixar" : "Fixar") @a.Titulo" @onclick="() => AlternarFixoAsync(a)">@(a.Fixado ? "Desafixar" : "Fixar")</button>
+            }
+        </div>
+    </div>
+}
+@if (anuncios.Count == 0)
+{
+    <p class="text-muted">Ainda não publicou nenhum anúncio.</p>
+}
+
+@code {
+    private readonly DateOnly hoje = DateOnly.FromDateTime(DateTime.Today);
+    private List<Anuncio> anuncios = [];
+    private string titulo = "", texto = "", autorNome = "";
+    private DestinatariosAnuncio destinatarios;
+    private DateTime? expiraEm;
+    private bool fixado, editavel, erro;
+    private string? mensagem;
+
+    protected override async Task CarregarAsync()
+    {
+        if (EscolaId is not { } id) return;
+        var escola = await Db.Escolas.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id);
+        editavel = escola?.EstadoLicenca(hoje) == EstadoLicenca.Valida;
+        autorNome = await Db.Users.AsNoTracking().Where(u => u.Id == UserId).Select(u => u.NomeCompleto ?? u.UserName!).FirstOrDefaultAsync() ?? "Escola";
+        await RecarregarAsync();
+    }
+
+    private async Task RecarregarAsync() =>
+        anuncios = await Db.Anuncios.AsNoTracking()
+            .OrderByDescending(a => a.Fixado).ThenByDescending(a => a.PublicadoEmUtc).Take(100).ToListAsync();
+
+    private async Task PublicarAsync()
+    {
+        erro = true;
+        if (!editavel) return;
+        DateOnly? fim = expiraEm is { } d ? DateOnly.FromDateTime(d) : null;
+        if (Anuncio.Validar(titulo, texto, fim, hoje) is { } problema) { mensagem = problema; return; }
+
+        var a = new Anuncio
+        {
+            Titulo = titulo.Trim(), Texto = texto.Trim(), Destinatarios = destinatarios, Fixado = fixado, ExpiraEm = fim,
+            AutorUserId = UserId, AutorNome = autorNome
+        };
+        Db.Anuncios.Add(a);
+        await Db.SaveChangesAsync();
+        Db.Alteracoes.Add(new RegistoAlteracao { UserId = UserId, Entidade = nameof(Anuncio), EntidadeId = a.Id.ToString(), Acao = "Publicado", ValorNovo = a.Titulo });
+        await Db.SaveChangesAsync();
+
+        titulo = texto = ""; expiraEm = null; fixado = false; destinatarios = DestinatariosAnuncio.Todos;
+        erro = false; mensagem = $"Anúncio \"{a.Titulo}\" publicado.";
+        await RecarregarAsync();
+    }
+
+    private async Task AlternarArquivoAsync(Anuncio a)
+    {
+        var db = await Db.Anuncios.FirstAsync(x => x.Id == a.Id);
+        db.Arquivado = !db.Arquivado;
+        Db.Alteracoes.Add(new RegistoAlteracao { UserId = UserId, Entidade = nameof(Anuncio), EntidadeId = a.Id.ToString(), Acao = db.Arquivado ? "Arquivado" : "Desarquivado", ValorNovo = db.Titulo });
+        await Db.SaveChangesAsync();
+        erro = false; mensagem = $"Anúncio \"{db.Titulo}\" {(db.Arquivado ? "arquivado" : "desarquivado")}.";
+        await RecarregarAsync();
+    }
+
+    private async Task AlternarFixoAsync(Anuncio a)
+    {
+        var db = await Db.Anuncios.FirstAsync(x => x.Id == a.Id);
+        db.Fixado = !db.Fixado;
+        Db.Alteracoes.Add(new RegistoAlteracao { UserId = UserId, Entidade = nameof(Anuncio), EntidadeId = a.Id.ToString(), Acao = db.Fixado ? "Fixado" : "Desafixado", ValorNovo = db.Titulo });
+        await Db.SaveChangesAsync();
+        erro = false; mensagem = null;
+        await RecarregarAsync();
+    }
+}
