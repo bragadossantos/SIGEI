@@ -34,6 +34,14 @@
             </div>
         </AuthorizeView>
 
+        <AuthorizeView Policy="@Sigei.Web.Data.Politicas.GerirMatriculasETurmas" Context="m5">
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="secretaria/acessos">
+                    <span class="bi lock-nav-menu" aria-hidden="true"></span> Acessos
+                </NavLink>
+            </div>
+        </AuthorizeView>
+
         <AuthorizeView Policy="@Sigei.Web.Data.Politicas.AssociarDisciplinasATurmas" Context="m1">
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="secretaria/turmas">
@@ -54,6 +62,14 @@
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="direcao/ano-letivo">
                     <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Ano letivo
+                </NavLink>
+            </div>
+        </AuthorizeView>
+
+        <AuthorizeView Policy="@Sigei.Web.Data.Politicas.GerirDefinicoesEscola" Context="m6">
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="direcao/pessoal">
+                    <span class="bi person-fill-nav-menu" aria-hidden="true"></span> Pessoal
                 </NavLink>
             </div>
         </AuthorizeView>

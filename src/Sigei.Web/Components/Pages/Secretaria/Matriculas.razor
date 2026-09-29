@@ -2,13 +2,11 @@
 @rendermode InteractiveServer
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = Politicas.GerirMatriculasETurmas)]
 @inherits PaginaEscola
-@using System.Security.Cryptography
-@using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
 @using Sigei.Domain
 @using Sigei.Web.Data
 @inject ApplicationDbContext Db
-@inject UserManager<ApplicationUser> Utilizadores
+@inject GestaoContas Contas
 
 <PageTitle>Matrículas</PageTitle>
 
@@ -33,8 +31,8 @@
 @if (acessoCriado is not null)
 {
     <div class="alert alert-warning" role="alert">
-        <strong>Acesso criado.</strong> Entregue estes dados ao titular; a palavra-passe temporária só é mostrada agora.<br />
-        Utilizador: <code>@acessoCriado.Value.Email</code> · Palavra-passe: <code>@acessoCriado.Value.Palavrapasse</code>
+        <strong>Acesso criado.</strong> Entregue estes dados ao titular; a palavra-passe temporária só é mostrada agora e terá de ser mudada no primeiro acesso.<br />
+        Utilizador: <code>@acessoCriado.Value.Utilizador</code> · Palavra-passe: <code>@acessoCriado.Value.Palavrapasse</code>
     </div>
 }
 
@@ -154,7 +152,7 @@
                                             <span class="flex-grow-1">Encarregado: @e.Nome @(e.UserId is null ? "" : "· com acesso")</span>
                                             @if (e.UserId is null && editavel)
                                             {
-                                                <input class="form-control form-control-sm w-auto" placeholder="email do encarregado" aria-label="Email de @e.Nome" @bind="CampoEnc(e.Id).Valor" @bind:event="oninput" />
+                                                <input class="form-control form-control-sm w-auto" placeholder="telefone do encarregado" aria-label="Telefone de @e.Nome" @bind="CampoEnc(e.Id, e.Telefone).Valor" @bind:event="oninput" />
                                                 <button class="btn btn-sm btn-outline-primary" aria-label="Criar acesso para @e.Nome" @onclick="() => CriarAcessoEncarregadoAsync(e)">Criar acesso</button>
                                             }
                                         </div>
@@ -165,7 +163,7 @@
                                             <span class="flex-grow-1">Aluno @(m.Aluno.UserId is null ? "" : "· com acesso")</span>
                                             @if (m.Aluno.UserId is null && editavel)
                                             {
-                                                <input class="form-control form-control-sm w-auto" placeholder="email do aluno" aria-label="Email do aluno" @bind="CampoAluno(m.Aluno.Id).Valor" @bind:event="oninput" />
+                                                <input class="form-control form-control-sm w-auto" placeholder="telefone ou utilizador do aluno" aria-label="Telefone ou utilizador do aluno" @bind="CampoAluno(m.Aluno.Id).Valor" @bind:event="oninput" />
                                                 <button class="btn btn-sm btn-outline-primary" aria-label="Criar acesso para o aluno @m.Aluno.Nome" @onclick="() => CriarAcessoAlunoAsync(m.Aluno)">Criar acesso</button>
                                             }
                                         </div>
@@ -205,16 +203,16 @@
     private List<Candidato> candidatos = [];
     private bool editavel, erro;
     private string? mensagem;
-    private (string Email, string Palavrapasse)? acessoCriado;
+    private (string Utilizador, string Palavrapasse)? acessoCriado;
     private int aberta, turmaNova;
     private string alunoNome = "", encNome = "", encTelefone = "";
 
     // Um campo de email por pessoa: encarregado e aluno não partilham o mesmo valor.
     private sealed class CampoTexto { public string Valor { get; set; } = ""; }
     private readonly Dictionary<string, CampoTexto> campos = [];
-    private CampoTexto CampoEnc(int id) => Campo($"e{id}");
-    private CampoTexto CampoAluno(int id) => Campo($"a{id}");
-    private CampoTexto Campo(string chave) => campos.TryGetValue(chave, out var c) ? c : campos[chave] = new();
+    private CampoTexto CampoEnc(int id, string? telefone = null) => Campo($"e{id}", NomesDeUtilizador.Normalizar(telefone));
+    private CampoTexto CampoAluno(int id) => Campo($"a{id}", "");
+    private CampoTexto Campo(string chave, string inicial) => campos.TryGetValue(chave, out var c) ? c : campos[chave] = new() { Valor = inicial };
     private DateTime? nascimento;
 
     protected override async Task CarregarAsync()
@@ -327,16 +325,16 @@
         await RecarregarAsync();
     }
 
+    private Ator? Ator => Perfil is { } p && EscolaId is { } e ? new Ator(UserId, p, e) : null;
+
     private async Task CriarAcessoEncarregadoAsync(Encarregado e)
     {
         var enc = await Db.Encarregados.FirstAsync(x => x.Id == e.Id);
-        var email = CampoEnc(e.Id).Valor;
-        var criado = await CriarUtilizadorAsync(email, enc.Nome, PerfilUtilizador.Encarregado);
-        if (criado is null) return;
-        enc.UserId = criado.Value.Id;
+        var r = await CriarContaAsync(CampoEnc(e.Id, e.Telefone).Valor, enc.Nome, PerfilUtilizador.Encarregado);
+        if (r is null) return;
+        enc.UserId = r.UserId;
         await Db.SaveChangesAsync();
-        await RegistarAsync(0, "Acesso criado (encarregado)", null, email.Trim(), nameof(Encarregado), enc.Id.ToString());
-        CampoEnc(e.Id).Valor = "";
+        CampoEnc(e.Id, e.Telefone).Valor = "";
         await RecarregarAsync();
     }
 
@@ -345,43 +343,24 @@
         var m = matriculas.FirstOrDefault(x => x.AlunoId == a.Id);
         if (m is null || !m.Classe.AlunoTemAcessoProprio) { erro = true; mensagem = "O aluno só tem acesso próprio a partir da 7.ª classe."; return; }
         var aluno = await Db.Alunos.FirstAsync(x => x.Id == a.Id);
-        var email = CampoAluno(a.Id).Valor;
-        var criado = await CriarUtilizadorAsync(email, aluno.Nome, PerfilUtilizador.Aluno);
-        if (criado is null) return;
-        aluno.UserId = criado.Value.Id;
+        var r = await CriarContaAsync(CampoAluno(a.Id).Valor, aluno.Nome, PerfilUtilizador.Aluno);
+        if (r is null) return;
+        aluno.UserId = r.UserId;
         await Db.SaveChangesAsync();
-        await RegistarAsync(0, "Acesso criado (aluno)", null, email.Trim(), nameof(Aluno), aluno.Id.ToString());
         CampoAluno(a.Id).Valor = "";
         await RecarregarAsync();
     }
 
     /// <summary>O perfil e a escola vêm sempre do servidor, nunca do formulário.</summary>
-    private async Task<(string Id, string Palavrapasse)?> CriarUtilizadorAsync(string email, string nome, PerfilUtilizador perfil)
+    private async Task<ResultadoConta?> CriarContaAsync(string utilizador, string nome, PerfilUtilizador perfil)
     {
         erro = true; acessoCriado = null;
-        email = email.Trim();
-        if (!editavel || EscolaId is not { } escolaId) return null;
-        if (!email.Contains('@') || email.Length < 5) { mensagem = "Indique um email válido."; return null; }
-        if (await Utilizadores.FindByEmailAsync(email) is not null) { mensagem = "Já existe uma conta com esse email."; return null; }
-
-        var palavrapasse = GerarPalavrapasse();
-        var u = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true, EscolaId = escolaId, Perfil = perfil, NomeCompleto = nome };
-        var r = await Utilizadores.CreateAsync(u, palavrapasse);
-        if (!r.Succeeded) { mensagem = string.Join(" ", r.Errors.Select(x => x.Description)); return null; }
-
+        if (!editavel || Ator is not { } ator || EscolaId is not { } escolaId) return null;
+        var r = await Contas.CriarAsync(ator, utilizador, nome, perfil, escolaId);
+        if (!r.Sucesso) { mensagem = r.Erro; return null; }
         erro = false; mensagem = null;
-        acessoCriado = (email, palavrapasse);
-        return (u.Id, palavrapasse);
-    }
-
-    private static string GerarPalavrapasse()
-    {
-        const string maiusculas = "ABCDEFGHJKLMNPQRSTUVWXYZ", minusculas = "abcdefghijkmnpqrstuvwxyz", digitos = "23456789", especiais = "@#$%";
-        static char Um(string s) => s[RandomNumberGenerator.GetInt32(s.Length)];
-        var chars = new List<char> { Um(maiusculas), Um(minusculas), Um(digitos), Um(especiais) };
-        chars.AddRange(Enumerable.Range(0, 6).Select(_ => Um(maiusculas + minusculas + digitos)));
-        RandomNumberGenerator.Shuffle(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(chars));
-        return new string(chars.ToArray());
+        acessoCriado = (r.Utilizador!, r.Palavrapasse!);
+        return r;
     }
 
     private async Task RegistarAsync(int matriculaId, string acao, string? antes, string? depois, string entidade = nameof(Matricula), string? entidadeId = null)

@@ -9,4 +9,7 @@ public class ApplicationUser : IdentityUser
     public int? EscolaId { get; set; }
     public PerfilUtilizador Perfil { get; set; } = PerfilUtilizador.Encarregado;
     public string? NomeCompleto { get; set; }
+
+    /// <summary>Verdadeiro depois de a conta ser criada ou de a palavra-passe ser reposta por outra pessoa.</summary>
+    public bool MudarPalavrapasse { get; set; }
 }

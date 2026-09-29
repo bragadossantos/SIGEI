@@ -20,10 +20,14 @@ public class Escola
     public int NumeroMensalidades { get; set; } = 10; // Setembro a Junho
 
     /// <summary>Licença expirada = só leitura durante a carência (30 dias); depois disso, sem acesso.</summary>
-    public EstadoLicenca EstadoLicenca(DateOnly hoje) =>
-        !Ativa ? Domain.EstadoLicenca.Suspensa
-        : hoje <= LicencaValidaAte ? Domain.EstadoLicenca.Valida
-        : hoje <= LicencaValidaAte.AddDays(30) ? Domain.EstadoLicenca.SoLeitura
+    public EstadoLicenca EstadoLicenca(DateOnly hoje) => CalcularEstado(Ativa, LicencaValidaAte, hoje);
+
+    public const int DiasDeCarencia = 30;
+
+    public static EstadoLicenca CalcularEstado(bool ativa, DateOnly validaAte, DateOnly hoje) =>
+        !ativa ? Domain.EstadoLicenca.Suspensa
+        : hoje <= validaAte ? Domain.EstadoLicenca.Valida
+        : hoje <= validaAte.AddDays(DiasDeCarencia) ? Domain.EstadoLicenca.SoLeitura
         : Domain.EstadoLicenca.Expirada;
 }
 

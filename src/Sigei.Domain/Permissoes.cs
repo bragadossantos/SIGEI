@@ -21,6 +21,7 @@ public enum Permissao
     LancarNotas,
     AbrirFecharAnoLetivo,
     GerirDefinicoesEscola,
+    AdministrarPlataforma,
     ConsultarNotas
 }
 
@@ -30,8 +31,8 @@ public static class MatrizPermissoes
     public static bool Tem(PerfilUtilizador perfil, Permissao permissao, bool secretariaGereDisciplinas = false) =>
         perfil switch
         {
-            PerfilUtilizador.AdminSaas => false, // administra escolas e licenças, não os dados pedagógicos
-            PerfilUtilizador.Direcao => permissao != Permissao.LancarNotas && permissao != Permissao.ConsultarNotas,
+            PerfilUtilizador.AdminSaas => permissao == Permissao.AdministrarPlataforma, // escolas e licenças, nunca os dados pedagógicos
+            PerfilUtilizador.Direcao => permissao is not (Permissao.LancarNotas or Permissao.ConsultarNotas or Permissao.AdministrarPlataforma),
             PerfilUtilizador.Secretaria => permissao switch
             {
                 Permissao.AssociarDisciplinasATurmas

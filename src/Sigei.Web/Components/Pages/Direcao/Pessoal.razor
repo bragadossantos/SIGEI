@@ -1,0 +1,12 @@
+@page "/direcao/pessoal"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = Politicas.GerirDefinicoesEscola)]
+@using Sigei.Domain
+@using Sigei.Web.Data
+
+<PageTitle>Pessoal da escola</PageTitle>
+
+<h1 class="h3 mb-1">Pessoal da escola</h1>
+<p class="text-muted">Contas de professores e da secretaria. Ao criar uma conta ou repor a palavra-passe, é gerada uma palavra-passe temporária.</p>
+
+<GestaoDeContas Perfis="@(new[] { PerfilUtilizador.Professor, PerfilUtilizador.Secretaria })" PodeCriar="true" />

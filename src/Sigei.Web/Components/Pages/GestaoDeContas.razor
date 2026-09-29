@@ -1,0 +1,165 @@
+@inherits PaginaEscola
+@using Microsoft.EntityFrameworkCore
+@using Sigei.Domain
+@using Sigei.Web.Data
+@inject ApplicationDbContext Db
+@inject GestaoContas Contas
+
+@if (acesso is not null)
+{
+    <div class="alert alert-warning" role="alert">
+        <strong>@acesso.Titulo</strong> Entregue estes dados à pessoa; a palavra-passe temporária só é mostrada agora
+        e terá de ser mudada no primeiro acesso.<br />
+        Utilizador: <code>@acesso.Utilizador</code> · Palavra-passe: <code>@acesso.Palavrapasse</code>
+    </div>
+}
+@if (mensagem is not null)
+{
+    <div class="alert @(erro ? "alert-danger" : "alert-success") py-2" role="status">@mensagem</div>
+}
+
+@if (PodeCriar)
+{
+    <div class="card mb-4">
+        <div class="card-header">Nova conta</div>
+        <form class="card-body row g-2 align-items-end" @onsubmit="CriarAsync" @onsubmit:preventDefault>
+            <div class="col-12 col-md-4">
+                <label class="form-label small mb-0" for="gc-nome">Nome completo</label>
+                <input id="gc-nome" class="form-control" maxlength="120" @bind="novoNome" />
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small mb-0" for="gc-user">Utilizador ou telefone</label>
+                <input id="gc-user" class="form-control" maxlength="30" placeholder="joana.silva" @bind="novoUtilizador" />
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small mb-0" for="gc-perfil">Função</label>
+                <select id="gc-perfil" class="form-select" @bind="novoPerfil">
+                    @foreach (var p in Perfis.Where(p => GestaoDeContasRegras.PodeGerir(Perfil ?? PerfilUtilizador.Encarregado, p)))
+                    {
+                        <option value="@p">@Rotulo(p)</option>
+                    }
+                </select>
+            </div>
+            <div class="col-auto"><button class="btn btn-primary" type="submit">Criar conta</button></div>
+        </form>
+    </div>
+}
+
+<div class="mb-3" style="max-width: 24rem">
+    <label class="visually-hidden" for="gc-pesquisa">Pesquisar</label>
+    <input id="gc-pesquisa" class="form-control" placeholder="Pesquisar por nome ou utilizador" @bind="pesquisa" @bind:event="oninput" />
+</div>
+
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead><tr><th>Nome</th><th>Utilizador</th><th>Função</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var u in Filtradas)
+            {
+                var desativada = GestaoContas.EstaDesativada(u);
+                <tr>
+                    <td class="fw-semibold">@u.NomeCompleto</td>
+                    <td><code>@u.UserName</code></td>
+                    <td>@Rotulo(u.Perfil)</td>
+                    <td>
+                        @if (desativada) { <span class="badge text-bg-secondary">Desativada</span> }
+                        else if (u.MudarPalavrapasse) { <span class="badge text-bg-warning">Palavra-passe temporária</span> }
+                        else { <span class="badge text-bg-success">Ativa</span> }
+                    </td>
+                    <td class="text-end text-nowrap">
+                        @if (u.Id != UserId && Perfil is { } eu && GestaoDeContasRegras.PodeGerir(eu, u.Perfil))
+                        {
+                            <button class="btn btn-sm btn-outline-primary" aria-label="Repor palavra-passe de @u.NomeCompleto" @onclick="() => ReporAsync(u)">Repor palavra-passe</button>
+                            <button class="btn btn-sm btn-outline-secondary" aria-label="@(desativada ? "Reativar" : "Desativar") @u.NomeCompleto" @onclick="() => AlternarAsync(u, desativada)">@(desativada ? "Reativar" : "Desativar")</button>
+                        }
+                    </td>
+                </tr>
+            }
+            @if (!Filtradas.Any())
+            {
+                <tr><td colspan="5" class="text-center text-muted py-4">Nenhuma conta encontrada.</td></tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    private sealed record Acesso(string Titulo, string Utilizador, string Palavrapasse);
+
+    [Parameter, EditorRequired] public PerfilUtilizador[] Perfis { get; set; } = [];
+    [Parameter] public bool PodeCriar { get; set; }
+
+    private List<ApplicationUser> utilizadores = [];
+    private Acesso? acesso;
+    private string? mensagem;
+    private bool erro;
+    private string pesquisa = "", novoNome = "", novoUtilizador = "";
+    private PerfilUtilizador novoPerfil;
+
+    private IEnumerable<ApplicationUser> Filtradas => string.IsNullOrWhiteSpace(pesquisa)
+        ? utilizadores
+        : utilizadores.Where(u => (u.NomeCompleto ?? "").Contains(pesquisa.Trim(), StringComparison.CurrentCultureIgnoreCase)
+                               || (u.UserName ?? "").Contains(pesquisa.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private Ator? Ator => Perfil is { } p && EscolaId is { } e ? new Ator(UserId, p, e) : null;
+
+    protected override async Task CarregarAsync()
+    {
+        novoPerfil = Perfis.FirstOrDefault(p => Perfil is { } eu && GestaoDeContasRegras.PodeGerir(eu, p));
+        await RecarregarAsync();
+    }
+
+    private async Task RecarregarAsync()
+    {
+        if (EscolaId is not { } id) return;
+        // Os utilizadores não têm filtro automático por escola: filtra-se aqui de forma explícita.
+        utilizadores = await Db.Users.AsNoTracking()
+            .Where(u => u.EscolaId == id && Perfis.Contains(u.Perfil))
+            .OrderBy(u => u.Perfil).ThenBy(u => u.NomeCompleto).ToListAsync();
+    }
+
+    private async Task CriarAsync()
+    {
+        acesso = null; erro = true;
+        if (Ator is not { } ator || EscolaId is not { } escolaId) return;
+        if (string.IsNullOrWhiteSpace(novoNome)) { mensagem = "Indique o nome completo."; return; }
+        var r = await Contas.CriarAsync(ator, novoUtilizador, novoNome, novoPerfil, escolaId);
+        if (!r.Sucesso) { mensagem = r.Erro; return; }
+        erro = false; mensagem = null;
+        acesso = new($"Conta de {novoNome.Trim()} criada.", r.Utilizador!, r.Palavrapasse!);
+        novoNome = novoUtilizador = "";
+        await RecarregarAsync();
+    }
+
+    private async Task ReporAsync(ApplicationUser u)
+    {
+        acesso = null; erro = true;
+        if (Ator is not { } ator) return;
+        var r = await Contas.ReporPalavrapasseAsync(ator, u.Id);
+        if (!r.Sucesso) { mensagem = r.Erro; return; }
+        erro = false; mensagem = null;
+        acesso = new($"Palavra-passe de {u.NomeCompleto} reposta.", r.Utilizador!, r.Palavrapasse!);
+        await RecarregarAsync();
+    }
+
+    private async Task AlternarAsync(ApplicationUser u, bool estavaDesativada)
+    {
+        acesso = null; erro = true;
+        if (Ator is not { } ator) return;
+        var r = await Contas.AlterarEstadoAsync(ator, u.Id, ativa: estavaDesativada);
+        if (!r.Sucesso) { mensagem = r.Erro; return; }
+        erro = false;
+        mensagem = $"Conta de {u.NomeCompleto} {(estavaDesativada ? "reativada" : "desativada")}.";
+        await RecarregarAsync();
+    }
+
+    public static string Rotulo(PerfilUtilizador p) => p switch
+    {
+        PerfilUtilizador.Direcao => "Direção",
+        PerfilUtilizador.Secretaria => "Secretaria",
+        PerfilUtilizador.Professor => "Professor",
+        PerfilUtilizador.Aluno => "Aluno",
+        PerfilUtilizador.Encarregado => "Encarregado",
+        _ => "Administrador"
+    };
+}

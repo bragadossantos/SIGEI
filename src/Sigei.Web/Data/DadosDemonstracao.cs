@@ -9,13 +9,13 @@ public static class DadosDemonstracao
 {
     public const string Palavrapasse = "Sigei@Demo2026";
 
-    public static readonly (string Email, string Nome, PerfilUtilizador Perfil)[] Contas =
+    public static readonly (string Utilizador, string Nome, PerfilUtilizador Perfil)[] Contas =
     [
-        ("direcao@demo.sigei.ao", "Direção (demonstração)", PerfilUtilizador.Direcao),
-        ("secretaria@demo.sigei.ao", "Secretaria (demonstração)", PerfilUtilizador.Secretaria),
-        ("professor@demo.sigei.ao", "Professor (demonstração)", PerfilUtilizador.Professor),
-        ("aluno8@demo.sigei.ao", "Luzia Manuel", PerfilUtilizador.Aluno),
-        ("encarregado5@demo.sigei.ao", "Maria Kiala", PerfilUtilizador.Encarregado),
+        ("direcao.demo", "Direção (demonstração)", PerfilUtilizador.Direcao),
+        ("secretaria.demo", "Secretaria (demonstração)", PerfilUtilizador.Secretaria),
+        ("professor.demo", "Professor (demonstração)", PerfilUtilizador.Professor),
+        ("aluno8.demo", "Luzia Manuel", PerfilUtilizador.Aluno),
+        ("923100001", "Maria Kiala", PerfilUtilizador.Encarregado),
     ];
 
     public static async Task CriarAsync(IServiceProvider services)
@@ -35,16 +35,16 @@ public static class DadosDemonstracao
         var e = escola.Id;
 
         var ids = new Dictionary<string, string>();
-        foreach (var (email, nome, perfil) in Contas)
+        foreach (var (utilizador, nome, perfil) in Contas)
         {
             var u = new ApplicationUser
             {
-                UserName = email, Email = email, EmailConfirmed = true,
+                UserName = utilizador, PhoneNumber = NomesDeUtilizador.EhTelefone(utilizador) ? utilizador : null,
                 EscolaId = e, Perfil = perfil, NomeCompleto = nome
             };
             var r = await users.CreateAsync(u, Palavrapasse);
             if (!r.Succeeded) throw new InvalidOperationException(string.Join("; ", r.Errors.Select(x => x.Description)));
-            ids[email] = u.Id;
+            ids[utilizador] = u.Id;
         }
 
         var ano = new AnoLetivo { EscolaId = e, Designacao = "2026/2027", Inicio = new(2026, 9, 1), Fim = new(2027, 7, 31) };
@@ -64,16 +64,16 @@ public static class DadosDemonstracao
                 db.TurmasDisciplinas.Add(new TurmaDisciplina
                 {
                     EscolaId = e, TurmaId = t.Id, DisciplinaId = d.Id,
-                    ProfessorUserId = ids["professor@demo.sigei.ao"]
+                    ProfessorUserId = ids["professor.demo"]
                 });
 
         // (aluno, encarregado, turma, mensalidade em atraso?, modo)
         var casos = new (string Aluno, int Idade, string Enc, string Tel, Turma Turma, bool Atraso, ModoAcessoNotas Modo, string? AlunoUser, string? EncUser)[]
         {
-            ("Mateus Kiala",       11, "Maria Kiala",       "923 100 001", t5, false, ModoAcessoNotas.Automatico, null, "encarregado5@demo.sigei.ao"),
+            ("Mateus Kiala",       11, "Maria Kiala",       "923 100 001", t5, false, ModoAcessoNotas.Automatico, null, "923100001"),
             ("Ndalu Fernandes",    10, "António Fernandes", "923 100 002", t5, true,  ModoAcessoNotas.Automatico, null, null),
             ("Sofia Bento",        11, "Rosa Bento",        "923 100 003", t5, true,  ModoAcessoNotas.Liberado,   null, null),
-            ("Luzia Manuel",       14, "Paulo Manuel",      "923 100 004", t8, false, ModoAcessoNotas.Automatico, "aluno8@demo.sigei.ao", null),
+            ("Luzia Manuel",       14, "Paulo Manuel",      "923 100 004", t8, false, ModoAcessoNotas.Automatico, "aluno8.demo", null),
             ("Domingos Cassoma",   14, "Joana Cassoma",     "923 100 005", t8, true,  ModoAcessoNotas.Automatico, null, null),
             ("Esperança Paulo",    15, "Filipe Paulo",      "923 100 006", t8, true,  ModoAcessoNotas.Bloqueado,  null, null),
         };

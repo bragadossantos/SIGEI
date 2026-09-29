@@ -1,0 +1,15 @@
+@page "/secretaria/acessos"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = Politicas.GerirMatriculasETurmas)]
+@using Sigei.Domain
+@using Sigei.Web.Data
+
+<PageTitle>Acessos de alunos e encarregados</PageTitle>
+
+<h1 class="h3 mb-1">Acessos de alunos e encarregados</h1>
+<p class="text-muted">
+    Quem esqueceu a palavra-passe ou ficou bloqueado vem à secretaria: reponha aqui e entregue a palavra-passe temporária.
+    As contas novas criam-se em <a href="secretaria/matriculas">Matrículas</a>.
+</p>
+
+<GestaoDeContas Perfis="@(new[] { PerfilUtilizador.Encarregado, PerfilUtilizador.Aluno })" PodeCriar="false" />

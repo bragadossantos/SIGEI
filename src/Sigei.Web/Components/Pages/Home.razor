@@ -31,9 +31,10 @@
         <ul class="list-group list-group-flush">
             @foreach (var c in Sigei.Web.Data.DadosDemonstracao.Contas)
             {
-                <li class="list-group-item"><strong>@c.Perfil</strong> — @c.Email</li>
+                <li class="list-group-item"><strong>@c.Perfil</strong> — @c.Utilizador</li>
             }
-            <li class="list-group-item text-muted">Palavra-passe: @Sigei.Web.Data.DadosDemonstracao.Palavrapasse</li>
+            <li class="list-group-item"><strong>Administrador da plataforma</strong> — @Sigei.Web.Data.AdministradorInicial.UtilizadorDemonstracao (palavra-passe @Sigei.Web.Data.AdministradorInicial.PalavrapasseDemonstracao)</li>
+            <li class="list-group-item text-muted">Palavra-passe das restantes contas: @Sigei.Web.Data.DadosDemonstracao.Palavrapasse</li>
         </ul>
     </div>
 }

@@ -7,7 +7,6 @@ using Sigei.Web.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -26,6 +25,7 @@ builder.Services.AddAuthentication(options =>
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 builder.Services.Configure<BackupOptions>(builder.Configuration.GetSection("Backups"));
 builder.Services.AddScoped<BackupAnoLetivoService>();
+builder.Services.AddScoped<GestaoContas>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ScopedTenantAccessor>();
 builder.Services.AddScoped<ITenantAccessor>(sp => sp.GetRequiredService<ScopedTenantAccessor>());
@@ -36,17 +36,14 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(connectionString));
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = true)
+builder.Services.AddIdentityCore<ApplicationUser>(ConfiguracaoIdentity.Aplicar)
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddClaimsPrincipalFactory<SigeiClaimsFactory>()
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
-builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
-
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseMigrationsEndPoint();
@@ -55,13 +52,33 @@ if (app.Environment.IsDevelopment())
 else
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    // O valor predefinido do HSTS é 30 dias.
     app.UseHsts();
 }
 
+await AdministradorInicial.GarantirAsync(app.Services, app.Configuration, app.Environment);
+
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 
+// Quem tem uma palavra-passe temporária só pode mudá-la (ou terminar sessão) antes de usar o sistema.
+app.Use(async (context, next) =>
+{
+    var caminho = context.Request.Path;
+    var isento = caminho.StartsWithSegments("/Account") || caminho.StartsWithSegments("/_blazor")
+                 || caminho.StartsWithSegments("/_framework") || caminho.StartsWithSegments("/_content")
+                 || Path.HasExtension(caminho.Value);
+    if (!isento && HttpMethods.IsGet(context.Request.Method)
+        && context.User.HasClaim(c => c.Type == SigeiClaims.MudarPalavrapasse))
+    {
+        context.Response.Redirect("/Account/Manage/ChangePassword");
+        return;
+    }
+    await next();
+});
+
+app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
@@ -80,7 +97,6 @@ app.MapGet("/direcao/backups/{ficheiro}", (string ficheiro, System.Security.Clai
     })
     .RequireAuthorization(Politicas.AbrirFecharAnoLetivo);
 
-// Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
 
 app.Run();

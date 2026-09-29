@@ -1,8 +1,15 @@
-﻿@inject NavigationManager NavigationManager
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider Autenticacao
 
 @code {
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        NavigationManager.NavigateTo($"Account/Login?returnUrl={Uri.EscapeDataString(NavigationManager.Uri)}", forceLoad: true);
+        // Quem já iniciou sessão mas não tem permissão vê "Acesso negado"; os outros vão para o login.
+        var user = (await Autenticacao.GetAuthenticationStateAsync()).User;
+        if (user.Identity?.IsAuthenticated == true)
+            NavigationManager.NavigateTo("Account/AccessDenied", forceLoad: true);
+        else
+            NavigationManager.NavigateTo($"Account/Login?returnUrl={Uri.EscapeDataString(NavigationManager.Uri)}", forceLoad: true);
     }
 }

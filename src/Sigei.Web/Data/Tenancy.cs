@@ -9,6 +9,7 @@ public static class SigeiClaims
 {
     public const string EscolaId = "sigei:escola_id";
     public const string Perfil = "sigei:perfil";
+    public const string MudarPalavrapasse = "sigei:mudar_senha";
 }
 
 /// <summary>Identifica a escola do pedido atual. Sem escola identificada, as consultas não devolvem dados (falha fechada).</summary>
@@ -39,6 +40,8 @@ public sealed class SigeiClaimsFactory(UserManager<ApplicationUser> users, IOpti
     {
         var identity = await base.GenerateClaimsAsync(user);
         identity.AddClaim(new Claim(SigeiClaims.Perfil, user.Perfil.ToString()));
+        if (user.MudarPalavrapasse)
+            identity.AddClaim(new Claim(SigeiClaims.MudarPalavrapasse, "1"));
         if (user.EscolaId is { } escola)
             identity.AddClaim(new Claim(SigeiClaims.EscolaId, escola.ToString()));
         return identity;
