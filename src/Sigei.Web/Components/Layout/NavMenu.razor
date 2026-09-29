@@ -4,17 +4,17 @@
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">SIGEI</a>
+        <a class="navbar-brand" href=""><span class="estrela" aria-hidden="true">★</span> SIGEI</a>
     </div>
 </div>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+<input type="checkbox" title="Abrir ou fechar o menu" class="navbar-toggler" />
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="nav flex-column">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Início
             </NavLink>
         </div>
 
@@ -61,7 +61,7 @@
         <AuthorizeView Policy="@Sigei.Web.Data.Politicas.GerirMatriculasETurmas" Context="m5">
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="secretaria/acessos">
-                    <span class="bi lock-nav-menu" aria-hidden="true"></span> Acessos
+                    <span class="bi bi-lock-nav-menu" aria-hidden="true"></span> Acessos
                 </NavLink>
             </div>
         </AuthorizeView>
@@ -69,7 +69,7 @@
         <AuthorizeView Policy="@Sigei.Web.Data.Politicas.AssociarDisciplinasATurmas" Context="m1">
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="secretaria/turmas">
-                    <span class="bi bi-list-nested-nav-menu-nav-menu" aria-hidden="true"></span> Turmas
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Turmas
                 </NavLink>
             </div>
         </AuthorizeView>
@@ -77,7 +77,7 @@
         <AuthorizeView Policy="@Sigei.Web.Data.Politicas.GerirCurriculoDisciplinas" Context="m2">
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="direcao/disciplinas">
-                    <span class="bi bi-list-nested-nav-menu-nav-menu" aria-hidden="true"></span> Disciplinas
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Disciplinas
                 </NavLink>
             </div>
         </AuthorizeView>
@@ -93,7 +93,7 @@
         <AuthorizeView Policy="@Sigei.Web.Data.Politicas.GerirDefinicoesEscola" Context="m6">
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="direcao/pessoal">
-                    <span class="bi person-fill-nav-menu" aria-hidden="true"></span> Pessoal
+                    <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> Pessoal
                 </NavLink>
             </div>
         </AuthorizeView>
@@ -101,7 +101,7 @@
         <AuthorizeView Policy="@Sigei.Web.Data.Politicas.GerirDefinicoesEscola" Context="m3">
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="direcao/definicoes">
-                    <span class="bi bi-list-nested-nav-menu-nav-menu" aria-hidden="true"></span> Definições
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Definições
                 </NavLink>
             </div>
         </AuthorizeView>
@@ -134,20 +134,15 @@
                         <AntiforgeryToken />
                         <input type="hidden" name="ReturnUrl" value="@currentUrl" />
                         <button type="submit" class="nav-link">
-                            <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Logout
+                            <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Terminar sessão
                         </button>
                     </form>
                 </div>
             </Authorized>
             <NotAuthorized>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Register">
-                        <span class="bi bi-person-nav-menu" aria-hidden="true"></span> Register
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
                     <NavLink class="nav-link" href="Account/Login">
-                        <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Login
+                        <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Entrar
                     </NavLink>
                 </div>
             </NotAuthorized>

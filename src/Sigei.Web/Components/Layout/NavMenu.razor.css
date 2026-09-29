@@ -17,11 +17,17 @@
 
 .top-row {
     min-height: 3.5rem;
-    background-color: rgba(0,0,0,0.4);
+    background-color: #0B0B0B;
 }
 
 .navbar-brand {
-    font-size: 1.1rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.navbar-brand .estrela {
+    color: #FFCB00;
 }
 
 .bi {
@@ -80,7 +86,7 @@
     }
 
     .nav-item ::deep .nav-link {
-        color: #d7d7d7;
+        color: #e6e6e6;
         background: none;
         border: none;
         border-radius: 4px;
@@ -92,8 +98,9 @@
     }
 
 .nav-item ::deep a.active {
-    background-color: rgba(255,255,255,0.37);
+    background-color: #CC092F;
     color: white;
+    box-shadow: inset 4px 0 0 #FFCB00;
 }
 
 .nav-item ::deep .nav-link:hover {

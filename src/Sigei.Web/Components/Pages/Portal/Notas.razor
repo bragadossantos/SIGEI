@@ -45,7 +45,7 @@
 }
 
 <div class="table-responsive">
-    <table class="table align-middle">
+    <table class="table align-middle tabela-empilhada">
         <thead>
             <tr>
                 <th>Disciplina</th>
@@ -59,12 +59,12 @@
             @foreach (var l in boletim)
             {
                 <tr>
-                    <td class="fw-semibold">@l.Disciplina</td>
-                    @foreach (var t in new[] { l.T1, l.T2, l.T3 })
+                    <td class="fw-semibold" data-rotulo="Disciplina">@l.Disciplina</td>
+                    @foreach (var (t, rotulo) in new[] { (l.T1, "1.º trimestre"), (l.T2, "2.º trimestre"), (l.T3, "3.º trimestre") })
                     {
-                        <td class="text-center"><Celula N="t" /></td>
+                        <td class="text-center" data-rotulo="@rotulo"><Celula N="t" /></td>
                     }
-                    <td class="text-center fw-semibold @Cor(l.MediaFinal)">@(l.MediaFinal?.ToString("0") ?? "—")</td>
+                    <td class="text-center fw-semibold @Cor(l.MediaFinal)" data-rotulo="Média final">@(l.MediaFinal?.ToString("0") ?? "—")</td>
                 </tr>
             }
             @if (boletim.Count == 0)

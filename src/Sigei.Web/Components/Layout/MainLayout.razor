@@ -1,13 +1,31 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 
+<div class="faixa-angola" aria-hidden="true"></div>
 <div class="page">
-    <div class="sidebar">
+    <aside class="sidebar" aria-label="Menu principal">
         <NavMenu />
-    </div>
+    </aside>
 
     <main>
         <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+            <AuthorizeView>
+                <Authorized>
+                    <span class="small text-muted me-auto d-none d-sm-inline">Olá, @(context.User.FindFirst("sigei:perfil")?.Value switch
+                    {
+                        "Direcao" => "Direção",
+                        "Secretaria" => "Secretaria",
+                        "Professor" => "Professor",
+                        "Aluno" => "Aluno",
+                        "Encarregado" => "Encarregado",
+                        "AdminSaas" => "Administrador",
+                        _ => ""
+                    })</span>
+                    <a href="Account/Manage">@context.User.Identity?.Name</a>
+                </Authorized>
+                <NotAuthorized>
+                    <a href="Account/Login">Entrar</a>
+                </NotAuthorized>
+            </AuthorizeView>
         </div>
 
         <article class="content px-4">
@@ -17,7 +35,7 @@
 </div>
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
+    Ocorreu um erro inesperado.
+    <a href="." class="reload">Recarregar</a>
     <span class="dismiss">🗙</span>
 </div>

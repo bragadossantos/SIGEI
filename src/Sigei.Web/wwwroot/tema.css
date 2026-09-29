@@ -1,0 +1,145 @@
+/*
+  Tema SIGEI — cores da bandeira de Angola: vermelho, preto e amarelo.
+  Contrastes (WCAG): branco sobre vermelho #CC092F = 5,8:1; amarelo #FFCB00 sobre preto #0B0B0B = 13:1.
+  O amarelo nunca se usa como cor de texto sobre fundo claro (não tem contraste): só em detalhes e sobre preto.
+  O verde só aparece em estados "em dia / válida", porque a cor do estado precisa de se distinguir de um erro.
+*/
+:root {
+    --angola-vermelho: #CC092F;
+    --angola-vermelho-escuro: #A30725;
+    --angola-preto: #0B0B0B;
+    --angola-amarelo: #FFCB00;
+    --angola-amarelo-suave: #FFF3C2;
+
+    --bs-primary: var(--angola-vermelho);
+    --bs-primary-rgb: 204, 9, 47;
+    --bs-link-color: var(--angola-vermelho);
+    --bs-link-color-rgb: 204, 9, 47;
+    --bs-link-hover-color: var(--angola-vermelho-escuro);
+    --bs-link-hover-color-rgb: 163, 7, 37;
+    --bs-warning: var(--angola-amarelo);
+    --bs-warning-rgb: 255, 203, 0;
+    --bs-focus-ring-color: rgba(255, 203, 0, 0.6);
+}
+
+html, body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: #fafafa;
+    color: #1a1a1a;
+}
+
+a, .btn-link { color: var(--angola-vermelho); }
+a:hover, .btn-link:hover { color: var(--angola-vermelho-escuro); }
+
+/* Botões */
+.btn-primary {
+    --bs-btn-color: #fff;
+    --bs-btn-bg: var(--angola-vermelho);
+    --bs-btn-border-color: var(--angola-vermelho);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--angola-vermelho-escuro);
+    --bs-btn-hover-border-color: var(--angola-vermelho-escuro);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--angola-vermelho-escuro);
+    --bs-btn-active-border-color: var(--angola-vermelho-escuro);
+    --bs-btn-disabled-color: #fff;
+    --bs-btn-disabled-bg: var(--angola-vermelho);
+    --bs-btn-disabled-border-color: var(--angola-vermelho);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--angola-vermelho);
+    --bs-btn-border-color: var(--angola-vermelho);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--angola-vermelho);
+    --bs-btn-hover-border-color: var(--angola-vermelho);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--angola-vermelho-escuro);
+    --bs-btn-active-border-color: var(--angola-vermelho-escuro);
+    --bs-btn-disabled-color: var(--angola-vermelho);
+    --bs-btn-disabled-border-color: var(--angola-vermelho);
+}
+
+.btn-outline-secondary {
+    --bs-btn-color: #3d3d3d;
+    --bs-btn-border-color: #8a8a8a;
+    --bs-btn-hover-bg: var(--angola-preto);
+    --bs-btn-hover-border-color: var(--angola-preto);
+    --bs-btn-active-bg: var(--angola-preto);
+    --bs-btn-active-border-color: var(--angola-preto);
+}
+
+/* Foco visível: anel amarelo com contorno preto (visível sobre claro e escuro) */
+.btn:focus-visible, .form-control:focus, .form-select:focus, .form-check-input:focus, a:focus-visible,
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus {
+    outline: 2px solid var(--angola-preto);
+    outline-offset: 1px;
+    box-shadow: 0 0 0 0.25rem rgba(255, 203, 0, 0.75);
+}
+
+.form-check-input:checked {
+    background-color: var(--angola-vermelho);
+    border-color: var(--angola-vermelho);
+}
+
+.form-control:focus, .form-select:focus { border-color: var(--angola-preto); }
+
+/* Estados: o texto amarelo é sempre escuro */
+.text-bg-warning { background-color: var(--angola-amarelo) !important; color: var(--angola-preto) !important; }
+.badge.text-bg-primary { background-color: var(--angola-vermelho) !important; }
+.alert-warning { --bs-alert-bg: var(--angola-amarelo-suave); --bs-alert-border-color: var(--angola-amarelo); --bs-alert-color: #3d3000; }
+
+.list-group-item.active { background-color: var(--angola-preto); border-color: var(--angola-preto); }
+
+.nav-pills .nav-link.active { background-color: var(--angola-vermelho); }
+
+/* Tabelas e cartões */
+.table > thead th {
+    border-bottom: 2px solid var(--angola-preto);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.card { border-color: #dcdcdc; }
+.card-header { background: var(--angola-preto); color: #fff; font-weight: 600; border-bottom: 3px solid var(--angola-amarelo); }
+.card.border-warning { border-color: var(--angola-amarelo) !important; border-width: 2px; }
+
+/* Cartões do painel */
+.cartao-neutro { border-left: 5px solid var(--angola-preto); }
+.cartao-sucesso { border-left: 5px solid #1e7a3c; }
+.cartao-aviso { border-left: 5px solid var(--angola-amarelo); }
+.cartao-perigo { border-left: 5px solid var(--angola-vermelho); }
+
+/* Anúncios */
+.anuncio { border-left: 5px solid var(--angola-preto); }
+.anuncio-fixado { border-left-color: var(--angola-amarelo); background: #fffdf3; }
+.anuncio-texto { white-space: pre-line; overflow-wrap: anywhere; }
+
+/* Faixa com as cores da bandeira, no topo de todas as páginas */
+.faixa-angola {
+    height: 8px;
+    background: linear-gradient(180deg, var(--angola-vermelho) 0 50%, var(--angola-preto) 50% 100%);
+}
+
+/* Validação */
+.valid.modified:not([type=checkbox]) { outline: 1px solid #1e7a3c; }
+.invalid { outline: 1px solid var(--angola-vermelho); }
+.validation-message { color: var(--angola-vermelho-escuro); }
+
+.blazor-error-boundary { background-color: var(--angola-vermelho); }
+.blazor-error-boundary::after { content: "Ocorreu um erro. Recarregue a página e tente de novo."; }
+
+@media (prefers-reduced-motion: reduce) {
+    * { scroll-behavior: auto !important; transition: none !important; }
+}
+
+/* Tabelas que se empilham em cartões no telemóvel (boletim de notas) */
+@media (max-width: 575.98px) {
+    .tabela-empilhada thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .tabela-empilhada, .tabela-empilhada tbody, .tabela-empilhada tr, .tabela-empilhada td { display: block; width: 100%; }
+    .tabela-empilhada tr { border: 1px solid #dcdcdc; border-left: 5px solid var(--angola-preto); border-radius: 6px; margin-bottom: 0.75rem; background: #fff; padding: 0.25rem 0; }
+    .tabela-empilhada td { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border: 0; padding: 0.35rem 0.75rem; text-align: right !important; }
+    .tabela-empilhada td::before { content: attr(data-rotulo); font-weight: 400; font-size: 0.8rem; color: #555; text-align: left; flex: 0 0 auto; }
+    .tabela-empilhada td[data-rotulo="Disciplina"] { font-size: 1.05rem; border-bottom: 1px solid #eee; }
+    .tabela-empilhada td[data-rotulo="Disciplina"]::before { content: none; }
+}
