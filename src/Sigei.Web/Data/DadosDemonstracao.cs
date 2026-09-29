@@ -54,8 +54,8 @@ public static class DadosDemonstracao
         db.AddRange(disciplinas);
         await db.SaveChangesAsync();
 
-        var t5 = new Turma { EscolaId = e, AnoLetivoId = ano.Id, Nome = "5.ª A", ClasseNumero = 5 };
-        var t8 = new Turma { EscolaId = e, AnoLetivoId = ano.Id, Nome = "8.ª B", ClasseNumero = 8 };
+        var t5 = new Turma { EscolaId = e, AnoLetivoId = ano.Id, Nome = "5.ª A", ClasseNumero = 5, MensalidadeKz = 25000m };
+        var t8 = new Turma { EscolaId = e, AnoLetivoId = ano.Id, Nome = "8.ª B", ClasseNumero = 8, MensalidadeKz = 35000m };
         db.AddRange(t5, t8);
         await db.SaveChangesAsync();
 
@@ -109,6 +109,14 @@ public static class DadosDemonstracao
             {
                 EscolaId = e, Referencia = "2026-10", ValorKz = valor, Vencimento = new(2026, 10, 5)
             });
+            // Documentos: o primeiro caso fica completo; os outros ficam a meio (para mostrar a checklist).
+            var exigidos = Documentos.Exigidos(mat.Classe);
+            for (var i = 0; i < exigidos.Count; i++)
+                mat.Documentos.Add(new DocumentoMatricula
+                {
+                    EscolaId = e, Tipo = exigidos[i],
+                    EntregueEm = c.Aluno == "Mateus Kiala" || i == 0 ? new DateOnly(2026, 8, 20) : null
+                });
             db.Add(mat);
             await db.SaveChangesAsync();
 

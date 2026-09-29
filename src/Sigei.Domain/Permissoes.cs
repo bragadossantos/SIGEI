@@ -20,6 +20,7 @@ public enum Permissao
     GerirMensalidades,
     LancarNotas,
     AbrirFecharAnoLetivo,
+    GerirDefinicoesEscola,
     ConsultarNotas
 }
 

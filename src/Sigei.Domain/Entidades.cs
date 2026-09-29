@@ -17,6 +17,7 @@ public class Escola
     public bool BloqueioPorMensalidadeAtivo { get; set; } = true;
     public bool SecretariaGereDisciplinas { get; set; }
     public int DiasToleranciaMensalidade { get; set; } = 5;
+    public int NumeroMensalidades { get; set; } = 10; // Setembro a Junho
 
     /// <summary>Licença expirada = só leitura durante a carência (30 dias); depois disso, sem acesso.</summary>
     public EstadoLicenca EstadoLicenca(DateOnly hoje) =>
@@ -55,6 +56,7 @@ public class Turma : IPertenceEscola
     public int AnoLetivoId { get; set; }
     public required string Nome { get; set; } // ex.: "7.ª A"
     public int ClasseNumero { get; set; }
+    public decimal MensalidadeKz { get; set; }
 }
 
 public class TurmaDisciplina : IPertenceEscola
@@ -98,6 +100,7 @@ public class Matricula : IPertenceEscola
     public Aluno? Aluno { get; set; }
     public Turma? Turma { get; set; }
     public List<Mensalidade> Mensalidades { get; set; } = [];
+    public List<DocumentoMatricula> Documentos { get; set; } = [];
 
     public Classe Classe => new(ClasseNumero);
 
@@ -150,4 +153,14 @@ public class RegistoAlteracao : IPertenceEscola
     public string? ValorAnterior { get; set; }
     public string? ValorNovo { get; set; }
     public DateTime QuandoUtc { get; set; } = DateTime.UtcNow;
+}
+
+public class DocumentoMatricula : IPertenceEscola
+{
+    public int Id { get; set; }
+    public int EscolaId { get; set; }
+    public int MatriculaId { get; set; }
+    public TipoDocumento Tipo { get; set; }
+    public DateOnly? EntregueEm { get; set; }
+    public string? Observacao { get; set; }
 }

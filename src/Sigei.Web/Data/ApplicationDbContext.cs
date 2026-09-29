@@ -18,6 +18,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Matricula> Matriculas => Set<Matricula>();
     public DbSet<Mensalidade> Mensalidades => Set<Mensalidade>();
     public DbSet<Nota> Notas => Set<Nota>();
+    public DbSet<DocumentoMatricula> DocumentosMatricula => Set<DocumentoMatricula>();
     public DbSet<RegistoAlteracao> Alteracoes => Set<RegistoAlteracao>();
 
     // Lido a cada consulta pelo filtro global; sem escola identificada não devolve nada.
@@ -39,6 +40,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<Matricula>().Ignore(m => m.Classe);
         b.Entity<Mensalidade>().Property(m => m.ValorKz).HasPrecision(14, 2);
         b.Entity<Mensalidade>().HasIndex(m => new { m.MatriculaId, m.Referencia }).IsUnique();
+        b.Entity<Turma>().Property(t => t.MensalidadeKz).HasPrecision(14, 2);
+        b.Entity<DocumentoMatricula>().Property(d => d.Tipo).HasConversion<string>().HasMaxLength(24);
+        b.Entity<DocumentoMatricula>().HasIndex(d => new { d.MatriculaId, d.Tipo }).IsUnique();
         b.Entity<Nota>().HasIndex(n => new { n.MatriculaId, n.TurmaDisciplinaId, n.Trimestre }).IsUnique();
         b.Entity<Nota>().Ignore(n => n.Valores);
         b.Entity<Nota>().Property(n => n.Trimestre).HasConversion<int>();

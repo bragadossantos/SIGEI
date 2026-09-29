@@ -91,3 +91,41 @@ public class MensalidadeELicencaTests
         Assert.Equal(EstadoLicenca.Suspensa, e.EstadoLicenca(Hoje));
     }
 }
+
+public class GestaoEscolarTests
+{
+    [Fact]
+    public void Iniciacao_exige_vacinas_e_as_outras_classes_exigem_certificado()
+    {
+        Assert.Contains(TipoDocumento.BoletimVacinas, Documentos.Exigidos(new Classe(0)));
+        Assert.DoesNotContain(TipoDocumento.CertificadoAnterior, Documentos.Exigidos(new Classe(0)));
+        Assert.Contains(TipoDocumento.CertificadoAnterior, Documentos.Exigidos(new Classe(8)));
+        Assert.All(Enumerable.Range(0, 14), n => Assert.Contains(TipoDocumento.BilheteOuCedula, Documentos.Exigidos(new Classe(n))));
+    }
+
+    [Fact]
+    public void Plano_de_mensalidades_comeca_no_mes_de_inicio_e_vence_no_dia_5()
+    {
+        var plano = PlanoMensalidades.Gerar(new DateOnly(2026, 9, 14), 10);
+        Assert.Equal(10, plano.Count);
+        Assert.Equal("2026-09", plano[0].Referencia);
+        Assert.Equal(new DateOnly(2026, 9, 5), plano[0].Vencimento);
+        Assert.Equal("2027-06", plano[^1].Referencia); // atravessa o fim do ano civil
+    }
+
+    [Fact]
+    public void Validacao_do_ano_letivo()
+    {
+        Assert.Null(RegrasAnoLetivo.Validar("2026/2027", new(2026, 9, 1), new(2027, 7, 31)));
+        Assert.NotNull(RegrasAnoLetivo.Validar("", new(2026, 9, 1), new(2027, 7, 31)));
+        Assert.NotNull(RegrasAnoLetivo.Validar("x", new(2027, 7, 31), new(2026, 9, 1)));
+        Assert.NotNull(RegrasAnoLetivo.Validar("x", new(2026, 9, 1), new(2026, 10, 1)));
+    }
+
+    [Fact]
+    public void Definicoes_da_escola_so_pela_direcao()
+    {
+        foreach (var p in Enum.GetValues<PerfilUtilizador>())
+            Assert.Equal(p == PerfilUtilizador.Direcao, MatrizPermissoes.Tem(p, Permissao.GerirDefinicoesEscola, true));
+    }
+}
