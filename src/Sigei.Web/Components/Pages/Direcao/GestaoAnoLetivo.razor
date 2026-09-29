@@ -1,0 +1,183 @@
+@page "/direcao/ano-letivo"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = Politicas.AbrirFecharAnoLetivo)]
+@inherits PaginaEscola
+@using Microsoft.EntityFrameworkCore
+@using Sigei.Domain
+@using Sigei.Web.Data
+@inject ApplicationDbContext Db
+@inject BackupAnoLetivoService Backups
+
+<PageTitle>Ano letivo</PageTitle>
+
+<h1 class="h3 mb-3">Ano letivo</h1>
+
+@if (escola is null)
+{
+    <div class="alert alert-warning">Não foi possível identificar a sua escola.</div>
+    return;
+}
+@if (mensagem is not null)
+{
+    <div class="alert @(erro ? "alert-danger" : "alert-success") py-2" role="status">@mensagem</div>
+}
+
+@if (aberto is null)
+{
+    <div class="card mb-4">
+        <div class="card-header">Abrir novo ano letivo</div>
+        <form class="card-body row g-2 align-items-end" @onsubmit="AbrirAsync" @onsubmit:preventDefault>
+            <div class="col-12 col-md-3">
+                <label class="form-label small mb-0" for="ds">Designação</label>
+                <input id="ds" class="form-control" placeholder="2027/2028" maxlength="20" @bind="designacao" />
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small mb-0" for="di">Início</label>
+                <input id="di" type="date" class="form-control" @bind="inicio" />
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small mb-0" for="df">Fim</label>
+                <input id="df" type="date" class="form-control" @bind="fim" />
+            </div>
+            <div class="col-auto"><button class="btn btn-primary" type="submit" disabled="@(!editavel)">Abrir ano letivo</button></div>
+        </form>
+    </div>
+}
+else
+{
+    <div class="card border-warning mb-4">
+        <div class="card-body">
+            <h2 class="h5">Ano letivo em curso: @aberto.Designacao</h2>
+            <p class="mb-2 text-muted">@aberto.Inicio.ToString("dd/MM/yyyy") a @aberto.Fim.ToString("dd/MM/yyyy")</p>
+            <p class="small">
+                Ao fechar o ano é criado um <strong>backup completo</strong> (alunos, matrículas, mensalidades, documentos e notas).
+                Depois de fechado, as notas deixam de poder ser alteradas; alunos e encarregados continuam a consultá-las.
+                Se o backup falhar, o ano <strong>não</strong> é fechado.
+            </p>
+            @if (!confirmar)
+            {
+                <button class="btn btn-outline-danger" disabled="@(!editavel)" @onclick="() => confirmar = true">Fechar ano letivo…</button>
+            }
+            else
+            {
+                <div class="alert alert-danger py-2">Tem a certeza? Esta ação não pode ser desfeita.</div>
+                <button class="btn btn-danger me-2" @onclick="FecharAsync" disabled="@ocupado">Sim, fechar @aberto.Designacao</button>
+                <button class="btn btn-outline-secondary" @onclick="() => confirmar = false" disabled="@ocupado">Cancelar</button>
+            }
+        </div>
+    </div>
+}
+
+<h2 class="h5">Histórico</h2>
+<table class="table align-middle">
+    <thead><tr><th>Ano</th><th>Período</th><th>Estado</th><th>Backup</th></tr></thead>
+    <tbody>
+        @foreach (var a in anos)
+        {
+            <tr>
+                <td class="fw-semibold">@a.Designacao</td>
+                <td>@a.Inicio.ToString("dd/MM/yyyy") – @a.Fim.ToString("dd/MM/yyyy")</td>
+                <td>
+                    @if (a.Estado == EstadoAnoLetivo.Aberto) { <span class="badge text-bg-success">Aberto</span> }
+                    else { <span class="badge text-bg-secondary">Fechado</span> }
+                </td>
+                <td>
+                    @if (a.BackupFeitoEm is { } quando)
+                    {
+                        <span class="small text-muted">@quando.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                        @if (ficheiros.TryGetValue(a.Id, out var f))
+                        {
+                            <a class="ms-2" href="direcao/backups/@Uri.EscapeDataString(f)" download>Descarregar</a>
+                        }
+                    }
+                    else { <span class="text-muted">—</span> }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private readonly DateOnly hoje = DateOnly.FromDateTime(DateTime.Today);
+    private Escola? escola;
+    private List<AnoLetivo> anos = [];
+    private AnoLetivo? aberto;
+    private Dictionary<int, string> ficheiros = [];
+    private bool editavel, erro, confirmar, ocupado;
+    private string? mensagem;
+    private string designacao = "";
+    private DateTime? inicio, fim;
+
+    protected override async Task CarregarAsync()
+    {
+        if (EscolaId is not { } id) return;
+        escola = await Db.Escolas.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id);
+        if (escola is null) return;
+        editavel = escola.EstadoLicenca(hoje) == EstadoLicenca.Valida;
+        await RecarregarAsync();
+    }
+
+    private async Task RecarregarAsync()
+    {
+        anos = await Db.AnosLetivos.AsNoTracking().OrderByDescending(a => a.Inicio).ToListAsync();
+        aberto = anos.FirstOrDefault(a => a.Estado == EstadoAnoLetivo.Aberto);
+
+        // O nome do ficheiro do último backup de cada ano é guardado no registo de auditoria.
+        var registos = await Db.Alteracoes.AsNoTracking().Where(r => r.Entidade == nameof(AnoLetivo) && r.Acao == "Fechado").ToListAsync();
+        ficheiros = registos.GroupBy(r => r.EntidadeId).ToDictionary(g => int.Parse(g.Key), g => g.OrderByDescending(r => r.QuandoUtc).First().ValorNovo ?? "")
+            .Where(kv => kv.Value.Length > 0).ToDictionary(kv => kv.Key, kv => kv.Value);
+    }
+
+    private async Task AbrirAsync()
+    {
+        erro = true;
+        if (!editavel) return;
+        if (aberto is not null) { mensagem = "Já existe um ano letivo aberto. Feche-o primeiro."; return; }
+        if (inicio is null || fim is null) { mensagem = "Indique as datas de início e de fim."; return; }
+        var i = DateOnly.FromDateTime(inicio.Value);
+        var f = DateOnly.FromDateTime(fim.Value);
+        var problema = RegrasAnoLetivo.Validar(designacao.Trim(), i, f);
+        if (problema is not null) { mensagem = problema; return; }
+        if (anos.Any(a => string.Equals(a.Designacao, designacao.Trim(), StringComparison.CurrentCultureIgnoreCase))) { mensagem = "Já existe um ano letivo com essa designação."; return; }
+        if (anos.Any(a => i <= a.Fim && f >= a.Inicio)) { mensagem = "O período coincide com o de outro ano letivo."; return; }
+
+        var novo = new AnoLetivo { Designacao = designacao.Trim(), Inicio = i, Fim = f };
+        Db.AnosLetivos.Add(novo);
+        await Db.SaveChangesAsync();
+        Db.Alteracoes.Add(new RegistoAlteracao { UserId = UserId, Entidade = nameof(AnoLetivo), EntidadeId = novo.Id.ToString(), Acao = "Aberto", ValorNovo = novo.Designacao });
+        await Db.SaveChangesAsync();
+        designacao = ""; inicio = fim = null;
+        erro = false; mensagem = $"Ano letivo {novo.Designacao} aberto.";
+        await RecarregarAsync();
+    }
+
+    private async Task FecharAsync()
+    {
+        if (aberto is null || EscolaId is not { } escolaId || !editavel) return;
+        ocupado = true; erro = true;
+        try
+        {
+            // 1.º o backup; se falhar, o ano continua aberto.
+            var backup = await Backups.CriarAsync(escolaId, aberto.Id);
+
+            var ano = await Db.AnosLetivos.FirstAsync(a => a.Id == aberto.Id);
+            ano.Estado = EstadoAnoLetivo.Fechado;
+            ano.BackupFeitoEm = DateTime.UtcNow;
+            Db.Alteracoes.Add(new RegistoAlteracao
+            {
+                UserId = UserId, Entidade = nameof(AnoLetivo), EntidadeId = ano.Id.ToString(), Acao = "Fechado",
+                ValorAnterior = EstadoAnoLetivo.Aberto.ToString(), ValorNovo = backup.Ficheiro
+            });
+            await Db.SaveChangesAsync();
+            erro = false;
+            mensagem = $"Ano letivo {ano.Designacao} fechado. Backup criado ({backup.Alunos} aluno(s), {backup.Notas} nota(s)).";
+            confirmar = false;
+            await RecarregarAsync();
+        }
+        catch (Exception)
+        {
+            mensagem = "Não foi possível criar o backup, por isso o ano letivo NÃO foi fechado. Tente novamente ou contacte o suporte.";
+        }
+        finally { ocupado = false; }
+    }
+}

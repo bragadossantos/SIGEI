@@ -24,6 +24,8 @@ builder.Services.AddAuthentication(options =>
     .AddIdentityCookies();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+builder.Services.Configure<BackupOptions>(builder.Configuration.GetSection("Backups"));
+builder.Services.AddScoped<BackupAnoLetivoService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ScopedTenantAccessor>();
 builder.Services.AddScoped<ITenantAccessor>(sp => sp.GetRequiredService<ScopedTenantAccessor>());
@@ -65,6 +67,18 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// Descarga de backups: só a direção, e só ficheiros da própria escola.
+app.MapGet("/direcao/backups/{ficheiro}", (string ficheiro, System.Security.Claims.ClaimsPrincipal user,
+        Microsoft.Extensions.Options.IOptions<BackupOptions> opcoes) =>
+    {
+        if (!int.TryParse(user.FindFirst(SigeiClaims.EscolaId)?.Value, out var escolaId)
+            || !BackupAnoLetivoService.PertenceAEscola(ficheiro, escolaId))
+            return Results.NotFound();
+        var caminho = Path.Combine(Path.GetFullPath(opcoes.Value.Pasta), ficheiro);
+        return File.Exists(caminho) ? Results.File(caminho, "application/json", ficheiro) : Results.NotFound();
+    })
+    .RequireAuthorization(Politicas.AbrirFecharAnoLetivo);
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
