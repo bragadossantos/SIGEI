@@ -1,0 +1,396 @@
+@page "/secretaria/matriculas"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = Politicas.GerirMatriculasETurmas)]
+@inherits PaginaEscola
+@using System.Security.Cryptography
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using Sigei.Domain
+@using Sigei.Web.Data
+@inject ApplicationDbContext Db
+@inject UserManager<ApplicationUser> Utilizadores
+
+<PageTitle>Matrículas</PageTitle>
+
+<h1 class="h3 mb-1">Matrículas</h1>
+
+@if (escola is null || ano is null)
+{
+    <div class="alert alert-info">Não há nenhum ano letivo aberto. A direção deve abrir um ano letivo primeiro.</div>
+    return;
+}
+
+<p class="text-muted">Ano letivo @ano.Designacao</p>
+
+@if (!editavel)
+{
+    <div class="alert alert-warning">A licença da escola não está ativa: as alterações estão desativadas.</div>
+}
+@if (mensagem is not null)
+{
+    <div class="alert @(erro ? "alert-danger" : "alert-success") py-2" role="status">@mensagem</div>
+}
+@if (acessoCriado is not null)
+{
+    <div class="alert alert-warning" role="alert">
+        <strong>Acesso criado.</strong> Entregue estes dados ao titular; a palavra-passe temporária só é mostrada agora.<br />
+        Utilizador: <code>@acessoCriado.Value.Email</code> · Palavra-passe: <code>@acessoCriado.Value.Palavrapasse</code>
+    </div>
+}
+
+@if (editavel)
+{
+    <div class="card mb-4">
+        <div class="card-header">Nova matrícula</div>
+        <form class="card-body row g-2 align-items-end" @onsubmit="NovaMatriculaAsync" @onsubmit:preventDefault>
+            <div class="col-12 col-md-4">
+                <label class="form-label small mb-0" for="an">Nome do aluno</label>
+                <input id="an" class="form-control" maxlength="120" @bind="alunoNome" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-0" for="ad">Nascimento</label>
+                <input id="ad" type="date" class="form-control" @bind="nascimento" />
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label small mb-0" for="en">Encarregado de educação</label>
+                <input id="en" class="form-control" maxlength="120" @bind="encNome" />
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small mb-0" for="et">Telefone</label>
+                <input id="et" class="form-control" maxlength="30" @bind="encTelefone" />
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small mb-0" for="nt">Turma</label>
+                <select id="nt" class="form-select" @bind="turmaNova">
+                    <option value="0">— escolher —</option>
+                    @foreach (var t in turmas)
+                    {
+                        <option value="@t.Id">@t.Nome (@(new Classe(t.ClasseNumero)))</option>
+                    }
+                </select>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary" type="submit">Matricular</button>
+            </div>
+        </form>
+    </div>
+
+    @if (candidatos.Count > 0)
+    {
+        <div class="card mb-4">
+            <div class="card-header">Renovar matrícula (alunos do ano anterior ainda sem matrícula neste ano)</div>
+            <ul class="list-group list-group-flush">
+                @foreach (var c in candidatos)
+                {
+                    <li class="list-group-item d-flex flex-wrap gap-2 align-items-center">
+                        <div class="flex-grow-1">
+                            <strong>@c.Nome</strong>
+                            <span class="text-muted small">— frequentou a @(new Classe(c.ClasseAnterior))</span>
+                        </div>
+                        <select class="form-select form-select-sm w-auto" aria-label="Turma de @c.Nome" @bind="c.TurmaEscolhida">
+                            <option value="0">— turma —</option>
+                            @foreach (var t in turmas.OrderBy(t => Math.Abs(t.ClasseNumero - (c.ClasseAnterior + 1))).ThenBy(t => t.Nome))
+                            {
+                                <option value="@t.Id">@t.Nome (@(new Classe(t.ClasseNumero)))</option>
+                            }
+                        </select>
+                        <button class="btn btn-sm btn-outline-primary" disabled="@(c.TurmaEscolhida == 0)" @onclick="() => RenovarAsync(c)">Renovar</button>
+                    </li>
+                }
+            </ul>
+            <div class="card-footer small text-muted">Escolha a turma: a seguinte para quem transitou, ou a mesma classe para quem repete.</div>
+        </div>
+    }
+}
+
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead><tr><th>Aluno</th><th>Turma</th><th>Encarregado</th><th>Documentos</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var m in matriculas)
+            {
+                var exigidos = Documentos.Exigidos(m.Classe);
+                var entregues = exigidos.Count(t => m.Documentos.Any(d => d.Tipo == t && d.EntregueEm is not null));
+                <tr>
+                    <td class="fw-semibold">@m.Aluno!.Nome</td>
+                    <td>@m.Turma!.Nome</td>
+                    <td>@string.Join(", ", m.Aluno.Encarregados.Select(e => e.Nome))</td>
+                    <td>
+                        @if (entregues == exigidos.Count) { <span class="badge text-bg-success">Completos</span> }
+                        else { <span class="badge text-bg-warning">@entregues/@exigidos.Count</span> }
+                    </td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-secondary" aria-expanded="@(aberta == m.Id)" @onclick="() => aberta = aberta == m.Id ? 0 : m.Id">
+                            @(aberta == m.Id ? "Fechar" : "Documentos e acessos")
+                        </button>
+                    </td>
+                </tr>
+                @if (aberta == m.Id)
+                {
+                    <tr>
+                        <td colspan="5" class="bg-body-tertiary">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="fw-semibold mb-2">Documentos em falta / entregues</div>
+                                    @foreach (var tipo in exigidos)
+                                    {
+                                        var doc = m.Documentos.FirstOrDefault(d => d.Tipo == tipo);
+                                        var entregue = doc?.EntregueEm is not null;
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="doc-@m.Id-@tipo" checked="@entregue" disabled="@(!editavel)"
+                                                   @onchange="e => AlternarDocumentoAsync(m, tipo, (bool)e.Value!)" />
+                                            <label class="form-check-label" for="doc-@m.Id-@tipo">
+                                                @Documentos.Nome(tipo)
+                                                @if (entregue) { <span class="small text-muted">— entregue em @doc!.EntregueEm!.Value.ToString("dd/MM/yyyy")</span> }
+                                            </label>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="fw-semibold mb-2">Acesso ao portal</div>
+                                    @foreach (var e in m.Aluno.Encarregados)
+                                    {
+                                        <div class="d-flex gap-2 align-items-center mb-2">
+                                            <span class="flex-grow-1">Encarregado: @e.Nome @(e.UserId is null ? "" : "· com acesso")</span>
+                                            @if (e.UserId is null && editavel)
+                                            {
+                                                <input class="form-control form-control-sm w-auto" placeholder="email do encarregado" aria-label="Email de @e.Nome" @bind="CampoEnc(e.Id).Valor" @bind:event="oninput" />
+                                                <button class="btn btn-sm btn-outline-primary" aria-label="Criar acesso para @e.Nome" @onclick="() => CriarAcessoEncarregadoAsync(e)">Criar acesso</button>
+                                            }
+                                        </div>
+                                    }
+                                    @if (m.Classe.AlunoTemAcessoProprio)
+                                    {
+                                        <div class="d-flex gap-2 align-items-center">
+                                            <span class="flex-grow-1">Aluno @(m.Aluno.UserId is null ? "" : "· com acesso")</span>
+                                            @if (m.Aluno.UserId is null && editavel)
+                                            {
+                                                <input class="form-control form-control-sm w-auto" placeholder="email do aluno" aria-label="Email do aluno" @bind="CampoAluno(m.Aluno.Id).Valor" @bind:event="oninput" />
+                                                <button class="btn btn-sm btn-outline-primary" aria-label="Criar acesso para o aluno @m.Aluno.Nome" @onclick="() => CriarAcessoAlunoAsync(m.Aluno)">Criar acesso</button>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="small text-muted">Até à 6.ª classe as notas são consultadas pelo encarregado.</div>
+                                    }
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+            @if (matriculas.Count == 0)
+            {
+                <tr><td colspan="5" class="text-center text-muted py-4">Ainda não há matrículas neste ano letivo.</td></tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    private sealed class Candidato
+    {
+        public int AlunoId { get; init; }
+        public required string Nome { get; init; }
+        public int ClasseAnterior { get; init; }
+        public int TurmaEscolhida { get; set; }
+    }
+
+    private readonly DateOnly hoje = DateOnly.FromDateTime(DateTime.Today);
+    private Escola? escola;
+    private AnoLetivo? ano;
+    private List<Turma> turmas = [];
+    private List<Matricula> matriculas = [];
+    private List<Candidato> candidatos = [];
+    private bool editavel, erro;
+    private string? mensagem;
+    private (string Email, string Palavrapasse)? acessoCriado;
+    private int aberta, turmaNova;
+    private string alunoNome = "", encNome = "", encTelefone = "";
+
+    // Um campo de email por pessoa: encarregado e aluno não partilham o mesmo valor.
+    private sealed class CampoTexto { public string Valor { get; set; } = ""; }
+    private readonly Dictionary<string, CampoTexto> campos = [];
+    private CampoTexto CampoEnc(int id) => Campo($"e{id}");
+    private CampoTexto CampoAluno(int id) => Campo($"a{id}");
+    private CampoTexto Campo(string chave) => campos.TryGetValue(chave, out var c) ? c : campos[chave] = new();
+    private DateTime? nascimento;
+
+    protected override async Task CarregarAsync()
+    {
+        if (EscolaId is not { } id) return;
+        escola = await Db.Escolas.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id);
+        if (escola is null) return;
+        editavel = escola.EstadoLicenca(hoje) == EstadoLicenca.Valida;
+        ano = await Db.AnosLetivos.AsNoTracking().Where(a => a.Estado == EstadoAnoLetivo.Aberto).OrderByDescending(a => a.Inicio).FirstOrDefaultAsync();
+        if (ano is null) return;
+        await RecarregarAsync();
+    }
+
+    private async Task RecarregarAsync()
+    {
+        turmas = await Db.Turmas.AsNoTracking().Where(t => t.AnoLetivoId == ano!.Id).OrderBy(t => t.ClasseNumero).ThenBy(t => t.Nome).ToListAsync();
+        matriculas = await Db.Matriculas.AsNoTracking()
+            .Include(m => m.Aluno!).ThenInclude(a => a.Encarregados)
+            .Include(m => m.Turma).Include(m => m.Documentos)
+            .Where(m => m.AnoLetivoId == ano!.Id)
+            .OrderBy(m => m.ClasseNumero).ThenBy(m => m.Aluno!.Nome)
+            .AsSplitQuery().ToListAsync();
+
+        // Candidatos à renovação: a matrícula mais recente de cada aluno é de um ano anterior.
+        var jaMatriculados = matriculas.Select(m => m.AlunoId).ToList();
+        var anteriores = await Db.Matriculas.AsNoTracking().Include(m => m.Aluno)
+            .Where(m => m.AnoLetivoId != ano!.Id && !jaMatriculados.Contains(m.AlunoId))
+            .OrderByDescending(m => m.AnoLetivoId).ToListAsync();
+        var anterioresPorAluno = anteriores.GroupBy(m => m.AlunoId).Select(g => g.First());
+        candidatos = anterioresPorAluno
+            .Select(m => new Candidato { AlunoId = m.AlunoId, Nome = m.Aluno!.Nome, ClasseAnterior = m.ClasseNumero })
+            .OrderBy(c => c.Nome).ToList();
+    }
+
+    private void CriarPlano(Matricula m, Turma turma)
+    {
+        foreach (var p in PlanoMensalidades.Gerar(ano!.Inicio, escola!.NumeroMensalidades))
+            m.Mensalidades.Add(new Mensalidade { Referencia = p.Referencia, Vencimento = p.Vencimento, ValorKz = turma.MensalidadeKz });
+        foreach (var tipo in Documentos.Exigidos(m.Classe))
+            m.Documentos.Add(new DocumentoMatricula { Tipo = tipo });
+    }
+
+    private async Task NovaMatriculaAsync()
+    {
+        erro = true; acessoCriado = null;
+        if (!editavel) return;
+        var nome = alunoNome.Trim();
+        if (nome.Length < 3) { mensagem = "Indique o nome completo do aluno."; return; }
+        if (nascimento is not { } nasc) { mensagem = "Indique a data de nascimento."; return; }
+        var idade = hoje.Year - nasc.Year;
+        if (idade is < 3 or > 35) { mensagem = "A data de nascimento parece incorreta."; return; }
+        if (string.IsNullOrWhiteSpace(encNome)) { mensagem = "Indique o encarregado de educação."; return; }
+        var turma = turmas.FirstOrDefault(t => t.Id == turmaNova);
+        if (turma is null) { mensagem = "Escolha a turma."; return; }
+
+        var dn = DateOnly.FromDateTime(nasc);
+        if (matriculas.Any(m => string.Equals(m.Aluno!.Nome, nome, StringComparison.CurrentCultureIgnoreCase) && m.Aluno.DataNascimento == dn))
+        {
+            mensagem = $"{nome} já está matriculado neste ano letivo.";
+            return;
+        }
+
+        var aluno = new Aluno { Nome = nome, DataNascimento = dn };
+        aluno.Encarregados.Add(new Encarregado { Nome = encNome.Trim(), Telefone = string.IsNullOrWhiteSpace(encTelefone) ? null : encTelefone.Trim() });
+        var m = new Matricula { AnoLetivoId = ano!.Id, Aluno = aluno, TurmaId = turma.Id, ClasseNumero = turma.ClasseNumero };
+        CriarPlano(m, turma);
+        Db.Matriculas.Add(m);
+        await Db.SaveChangesAsync();
+        await RegistarAsync(m.Id, "Matricula criada", null, $"{nome} — {turma.Nome}");
+
+        alunoNome = encNome = encTelefone = ""; nascimento = null; turmaNova = 0;
+        erro = false; mensagem = $"{nome} matriculado na turma {turma.Nome}.";
+        await RecarregarAsync();
+    }
+
+    private async Task RenovarAsync(Candidato c)
+    {
+        erro = true; acessoCriado = null;
+        var turma = turmas.FirstOrDefault(t => t.Id == c.TurmaEscolhida);
+        if (!editavel || turma is null) return;
+        if (await Db.Matriculas.AnyAsync(x => x.AnoLetivoId == ano!.Id && x.AlunoId == c.AlunoId)) { mensagem = "O aluno já tem matrícula neste ano."; return; }
+
+        var m = new Matricula { AnoLetivoId = ano!.Id, AlunoId = c.AlunoId, TurmaId = turma.Id, ClasseNumero = turma.ClasseNumero };
+        CriarPlano(m, turma);
+        Db.Matriculas.Add(m);
+        await Db.SaveChangesAsync();
+        await RegistarAsync(m.Id, "Matricula renovada", $"{new Classe(c.ClasseAnterior)}", $"{c.Nome} — {turma.Nome}");
+        erro = false; mensagem = $"Matrícula de {c.Nome} renovada para {turma.Nome}.";
+        await RecarregarAsync();
+    }
+
+    private async Task AlternarDocumentoAsync(Matricula m, TipoDocumento tipo, bool entregue)
+    {
+        if (!editavel) return;
+        var doc = await Db.DocumentosMatricula.FirstOrDefaultAsync(d => d.MatriculaId == m.Id && d.Tipo == tipo);
+        if (doc is null)
+        {
+            doc = new DocumentoMatricula { MatriculaId = m.Id, Tipo = tipo };
+            Db.DocumentosMatricula.Add(doc);
+        }
+        var antes = doc.EntregueEm?.ToString("yyyy-MM-dd");
+        doc.EntregueEm = entregue ? hoje : null;
+        Db.Alteracoes.Add(new RegistoAlteracao
+        {
+            UserId = UserId, Entidade = nameof(DocumentoMatricula), EntidadeId = $"{m.Id}/{tipo}", Acao = entregue ? "Entregue" : "Retirado",
+            ValorAnterior = antes, ValorNovo = doc.EntregueEm?.ToString("yyyy-MM-dd")
+        });
+        await Db.SaveChangesAsync();
+        erro = false; mensagem = null;
+        await RecarregarAsync();
+    }
+
+    private async Task CriarAcessoEncarregadoAsync(Encarregado e)
+    {
+        var enc = await Db.Encarregados.FirstAsync(x => x.Id == e.Id);
+        var email = CampoEnc(e.Id).Valor;
+        var criado = await CriarUtilizadorAsync(email, enc.Nome, PerfilUtilizador.Encarregado);
+        if (criado is null) return;
+        enc.UserId = criado.Value.Id;
+        await Db.SaveChangesAsync();
+        await RegistarAsync(0, "Acesso criado (encarregado)", null, email.Trim(), nameof(Encarregado), enc.Id.ToString());
+        CampoEnc(e.Id).Valor = "";
+        await RecarregarAsync();
+    }
+
+    private async Task CriarAcessoAlunoAsync(Aluno a)
+    {
+        var m = matriculas.FirstOrDefault(x => x.AlunoId == a.Id);
+        if (m is null || !m.Classe.AlunoTemAcessoProprio) { erro = true; mensagem = "O aluno só tem acesso próprio a partir da 7.ª classe."; return; }
+        var aluno = await Db.Alunos.FirstAsync(x => x.Id == a.Id);
+        var email = CampoAluno(a.Id).Valor;
+        var criado = await CriarUtilizadorAsync(email, aluno.Nome, PerfilUtilizador.Aluno);
+        if (criado is null) return;
+        aluno.UserId = criado.Value.Id;
+        await Db.SaveChangesAsync();
+        await RegistarAsync(0, "Acesso criado (aluno)", null, email.Trim(), nameof(Aluno), aluno.Id.ToString());
+        CampoAluno(a.Id).Valor = "";
+        await RecarregarAsync();
+    }
+
+    /// <summary>O perfil e a escola vêm sempre do servidor, nunca do formulário.</summary>
+    private async Task<(string Id, string Palavrapasse)?> CriarUtilizadorAsync(string email, string nome, PerfilUtilizador perfil)
+    {
+        erro = true; acessoCriado = null;
+        email = email.Trim();
+        if (!editavel || EscolaId is not { } escolaId) return null;
+        if (!email.Contains('@') || email.Length < 5) { mensagem = "Indique um email válido."; return null; }
+        if (await Utilizadores.FindByEmailAsync(email) is not null) { mensagem = "Já existe uma conta com esse email."; return null; }
+
+        var palavrapasse = GerarPalavrapasse();
+        var u = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true, EscolaId = escolaId, Perfil = perfil, NomeCompleto = nome };
+        var r = await Utilizadores.CreateAsync(u, palavrapasse);
+        if (!r.Succeeded) { mensagem = string.Join(" ", r.Errors.Select(x => x.Description)); return null; }
+
+        erro = false; mensagem = null;
+        acessoCriado = (email, palavrapasse);
+        return (u.Id, palavrapasse);
+    }
+
+    private static string GerarPalavrapasse()
+    {
+        const string maiusculas = "ABCDEFGHJKLMNPQRSTUVWXYZ", minusculas = "abcdefghijkmnpqrstuvwxyz", digitos = "23456789", especiais = "@#$%";
+        static char Um(string s) => s[RandomNumberGenerator.GetInt32(s.Length)];
+        var chars = new List<char> { Um(maiusculas), Um(minusculas), Um(digitos), Um(especiais) };
+        chars.AddRange(Enumerable.Range(0, 6).Select(_ => Um(maiusculas + minusculas + digitos)));
+        RandomNumberGenerator.Shuffle(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(chars));
+        return new string(chars.ToArray());
+    }
+
+    private async Task RegistarAsync(int matriculaId, string acao, string? antes, string? depois, string entidade = nameof(Matricula), string? entidadeId = null)
+    {
+        Db.Alteracoes.Add(new RegistoAlteracao
+        {
+            UserId = UserId, Entidade = entidade, EntidadeId = entidadeId ?? matriculaId.ToString(),
+            Acao = acao, ValorAnterior = antes, ValorNovo = depois
+        });
+        await Db.SaveChangesAsync();
+    }
+}

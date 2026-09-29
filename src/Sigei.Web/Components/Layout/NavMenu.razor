@@ -26,6 +26,14 @@
             </div>
         </AuthorizeView>
 
+        <AuthorizeView Policy="@Sigei.Web.Data.Politicas.GerirMatriculasETurmas" Context="m0">
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="secretaria/matriculas">
+                    <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> Matrículas
+                </NavLink>
+            </div>
+        </AuthorizeView>
+
         <AuthorizeView Policy="@Sigei.Web.Data.Politicas.AssociarDisciplinasATurmas" Context="m1">
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="secretaria/turmas">
